@@ -15,6 +15,9 @@ return new class extends Migration
             $table->id();
             $table->string('domain')->unique();
             $table->text('access_token')->nullable();
+            $table->timestamp('access_token_expires_at')->nullable();
+            $table->text('refresh_token')->nullable();
+            $table->timestamp('refresh_token_expires_at')->nullable();
             $table->json('scopes')->nullable();
             $table->timestamp('installed_at')->nullable();
             $table->timestamp('uninstalled_at')->nullable();

@@ -1,5 +1,6 @@
 <?php
 
+use App\Exceptions\AccessTokenRevokedException;
 use App\Http\Controllers\WebhookController;
 use App\Http\Middleware\AllowEmbeddingInShopifyAdmin;
 use App\Http\Middleware\HandleInertiaRequests;
@@ -51,4 +52,10 @@ return Application::configure(basePath: dirname(__DIR__))
                 ]);
             }
         });
+
+        // An access token Shopify has revoked was forgotten, so authenticating again installs the app...
+        $exceptions->map(
+            AccessTokenRevokedException::class,
+            fn (AccessTokenRevokedException $e) => new AuthenticationException($e->getMessage()),
+        );
     })->create();

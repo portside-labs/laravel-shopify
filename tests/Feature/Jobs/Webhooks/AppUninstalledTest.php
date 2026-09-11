@@ -13,6 +13,7 @@ it('forgets the access tokens of the shop and its staff', function () {
 
     $shop = $user->shop->refresh();
     expect($shop->isInstalled())->toBeFalse()
+        ->and($shop->refresh_token)->toBeNull()
         ->and($shop->uninstalled_at)->not->toBeNull();
     $user->refresh();
     expect($user->access_token)->toBeNull()

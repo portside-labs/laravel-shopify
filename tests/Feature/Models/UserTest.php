@@ -1,5 +1,6 @@
 <?php
 
+use App\Exceptions\AccessTokenRevokedException;
 use App\Models\User;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
@@ -28,4 +29,21 @@ test('the name is the first and last name', function () {
     $user = User::factory()->make(['first_name' => 'Jane', 'last_name' => 'Doe']);
 
     expect($user->name)->toBe('Jane Doe');
+});
+
+it('forgets the access token when Shopify rejects it', function () {
+    config()->set('shopify.api_version', '2026-07');
+    $user = User::factory()->create();
+    Http::fake([
+        "{$user->shop->domain}/admin/api/2026-07/graphql.json" => Http::response([
+            'errors' => '[API] Invalid API key or access token (unrecognized login or wrong password)',
+        ], 401),
+    ]);
+
+    expect(fn () => $user->api()->graphql('query { shop { name } }'))
+        ->toThrow(AccessTokenRevokedException::class);
+
+    $user->refresh();
+    expect($user->hasValidAccessToken())->toBeFalse()
+        ->and($user->shop->refresh()->isInstalled())->toBeTrue();
 });

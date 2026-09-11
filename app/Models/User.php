@@ -55,6 +55,51 @@ class User extends Authenticatable
     }
 
     /**
+     * Record the staff member's profile and online access token from Shopify's grant.
+     *
+     * @param  array{
+     *     access_token: string,
+     *     expires_in: int,
+     *     associated_user_scope: string,
+     *     associated_user: array{
+     *         first_name: string,
+     *         last_name: string,
+     *         email: string,
+     *         email_verified: bool,
+     *         account_owner: bool,
+     *         locale: string,
+     *         collaborator: bool,
+     *     },
+     * }  $grant
+     */
+    public function identify(array $grant): void
+    {
+        $this->forceFill([
+            'first_name' => $grant['associated_user']['first_name'],
+            'last_name' => $grant['associated_user']['last_name'],
+            'email' => $grant['associated_user']['email'],
+            'email_verified' => $grant['associated_user']['email_verified'],
+            'account_owner' => $grant['associated_user']['account_owner'],
+            'collaborator' => $grant['associated_user']['collaborator'],
+            'locale' => $grant['associated_user']['locale'],
+            'scopes' => array_values(array_filter(explode(',', $grant['associated_user_scope']))),
+            'access_token' => $grant['access_token'],
+            'access_token_expires_at' => now()->addSeconds($grant['expires_in']),
+        ])->save();
+    }
+
+    /**
+     * Forget the access token so that a new one is exchanged on the user's next visit.
+     */
+    public function forgetAccessToken(): void
+    {
+        $this->forceFill([
+            'access_token' => null,
+            'access_token_expires_at' => null,
+        ])->save();
+    }
+
+    /**
      * Determine if the user's online access token may still be used.
      */
     public function hasValidAccessToken(): bool
@@ -76,7 +121,7 @@ class User extends Authenticatable
             throw new LogicException("{$this->name} does not have a valid access token.");
         }
 
-        return new AdminApi($this->shop->domain, (string) $this->access_token);
+        return new AdminApi($this->shop->domain, (string) $this->access_token, revoked: fn () => $this->forgetAccessToken());
     }
 
     /**

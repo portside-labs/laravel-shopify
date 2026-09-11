@@ -21,10 +21,23 @@ class ShopFactory extends Factory
         return [
             'domain' => Str::slug(fake()->unique()->company()).'.myshopify.com',
             'access_token' => 'shpat_'.Str::random(32),
+            'access_token_expires_at' => now()->addHour(),
+            'refresh_token' => Str::random(64),
+            'refresh_token_expires_at' => now()->addDays(90),
             'scopes' => ['read_products'],
             'installed_at' => now(),
             'uninstalled_at' => null,
         ];
+    }
+
+    /**
+     * Indicate that the shop's access token is about to expire.
+     */
+    public function expiring(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'access_token_expires_at' => now()->addMinute(),
+        ]);
     }
 
     /**
@@ -34,6 +47,9 @@ class ShopFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'access_token' => null,
+            'access_token_expires_at' => null,
+            'refresh_token' => null,
+            'refresh_token_expires_at' => null,
             'uninstalled_at' => now(),
         ]);
     }

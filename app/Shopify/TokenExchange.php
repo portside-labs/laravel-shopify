@@ -2,6 +2,7 @@
 
 namespace App\Shopify;
 
+use App\Exceptions\AccessTokenRevokedException;
 use App\Exceptions\InvalidIdTokenException;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Http\Client\RequestException;
@@ -9,7 +10,7 @@ use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 
 /**
- * Exchange ID tokens for Admin API access tokens.
+ * Exchange ID tokens for Admin API access tokens, and refresh them.
  *
  * Because Shopify manages the app's installation, there is no OAuth redirect
  * dance: the ID token App Bridge already provides is exchanged directly for
@@ -25,9 +26,12 @@ final class TokenExchange
     public function __construct(private Repository $config) {}
 
     /**
-     * Request an offline access token, which acts as the shop and never expires.
+     * Request an expiring offline access token, which acts as the shop.
      *
-     * @return array{access_token: string, scope: string}
+     * The token lasts an hour and comes with a refresh token that lasts
+     * ninety days, so the shop keeps working between merchant visits.
+     *
+     * @return array{access_token: string, scope: string, expires_in?: int, refresh_token?: string, refresh_token_expires_in?: int}
      */
     public function offline(IdToken $token): array
     {
@@ -60,6 +64,30 @@ final class TokenExchange
     }
 
     /**
+     * Trade a refresh token for a new offline access token and refresh token.
+     *
+     * @return array{access_token: string, scope: string, expires_in: int, refresh_token: string, refresh_token_expires_in: int}
+     *
+     * @throws AccessTokenRevokedException
+     * @throws RequestException
+     */
+    public function refresh(string $shop, string $refreshToken): array
+    {
+        $response = $this->post($shop, [
+            'grant_type' => 'refresh_token',
+            'refresh_token' => $refreshToken,
+        ]);
+
+        if ($response->clientError()) {
+            throw new AccessTokenRevokedException(
+                $response->json('error_description', 'Shopify rejected the refresh token.'),
+            );
+        }
+
+        return $response->throw()->json();
+    }
+
+    /**
      * Exchange the ID token for the requested type of access token.
      *
      * @throws InvalidIdTokenException
@@ -67,16 +95,13 @@ final class TokenExchange
      */
     protected function exchange(IdToken $token, string $requestedTokenType): Response
     {
-        $response = Http::connectTimeout(5)
-            ->timeout(10)
-            ->post("https://{$token->shop()}/admin/oauth/access_token", [
-                'client_id' => $this->config->get('shopify.client_id'),
-                'client_secret' => $this->config->get('shopify.client_secret'),
-                'grant_type' => 'urn:ietf:params:oauth:grant-type:token-exchange',
-                'subject_token' => (string) $token,
-                'subject_token_type' => 'urn:ietf:params:oauth:token-type:id_token',
-                'requested_token_type' => $requestedTokenType,
-            ]);
+        $response = $this->post($token->shop(), [
+            'grant_type' => 'urn:ietf:params:oauth:grant-type:token-exchange',
+            'subject_token' => (string) $token,
+            'subject_token_type' => 'urn:ietf:params:oauth:token-type:id_token',
+            'requested_token_type' => $requestedTokenType,
+            'expiring' => '1',
+        ]);
 
         if ($response->badRequest()) {
             throw new InvalidIdTokenException(
@@ -85,5 +110,21 @@ final class TokenExchange
         }
 
         return $response->throw();
+    }
+
+    /**
+     * Send a grant request to the shop's token endpoint.
+     *
+     * @param  array<string, string>  $grant
+     */
+    protected function post(string $shop, array $grant): Response
+    {
+        return Http::connectTimeout(5)
+            ->timeout(10)
+            ->post("https://{$shop}/admin/oauth/access_token", [
+                'client_id' => $this->config->get('shopify.client_id'),
+                'client_secret' => $this->config->get('shopify.client_secret'),
+                ...$grant,
+            ]);
     }
 }

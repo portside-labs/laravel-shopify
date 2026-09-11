@@ -9,6 +9,22 @@ use Illuminate\Support\Facades\Http;
 use Inertia\Testing\AssertableInertia as Assert;
 
 /**
+ * A token exchange response granting an expiring offline access token to a shop.
+ *
+ * @return array<string, mixed>
+ */
+function offlineAccessToken(): array
+{
+    return [
+        'access_token' => 'shpat_offline',
+        'scope' => 'read_products,write_products',
+        'expires_in' => 3600,
+        'refresh_token' => 'refresh-1',
+        'refresh_token_expires_in' => 7776000,
+    ];
+}
+
+/**
  * A token exchange response granting an online access token to a staff member.
  *
  * @return array<string, mixed>
@@ -58,10 +74,11 @@ it('authenticates the staff member from the token Shopify adds to the URL when o
 });
 
 it('installs the shop and identifies the staff member the first time the app is opened', function () {
+    $this->freezeSecond();
     Event::fake([ShopInstalled::class]);
     Http::fake([
         'example.myshopify.com/admin/oauth/access_token' => Http::sequence()
-            ->push(['access_token' => 'shpat_offline', 'scope' => 'read_products,write_products'])
+            ->push(offlineAccessToken())
             ->push(onlineAccessToken()),
     ]);
     $jwt = idToken('example.myshopify.com', ['sub' => '42']);
@@ -74,8 +91,11 @@ it('installs the shop and identifies the staff member the first time the app is 
     );
     $shop = Shop::where('domain', 'example.myshopify.com')->sole();
     expect($shop->access_token)->toBe('shpat_offline')
+        ->and($shop->access_token_expires_at)->toEqual(now()->addHour())
+        ->and($shop->refresh_token)->toBe('refresh-1')
+        ->and($shop->refresh_token_expires_at)->toEqual(now()->addDays(90))
         ->and($shop->scopes)->toBe(['read_products', 'write_products'])
-        ->and($shop->installed_at)->not->toBeNull();
+        ->and($shop->installed_at)->toEqual(now());
     $user = $shop->users()->sole();
     expect($user->shopify_id)->toBe(42)
         ->and($user->name)->toBe('Jane Doe')
@@ -91,7 +111,8 @@ it('installs the shop and identifies the staff member the first time the app is 
             && $request['grant_type'] === 'urn:ietf:params:oauth:grant-type:token-exchange'
             && $request['subject_token'] === $jwt
             && $request['subject_token_type'] === 'urn:ietf:params:oauth:token-type:id_token'
-            && $request['requested_token_type'] === 'urn:shopify:params:oauth:token-type:offline-access-token',
+            && $request['requested_token_type'] === 'urn:shopify:params:oauth:token-type:offline-access-token'
+            && $request['expiring'] === '1',
         fn (Request $request) => $request['requested_token_type'] === 'urn:shopify:params:oauth:token-type:online-access-token',
     ]);
 });
@@ -100,7 +121,7 @@ it('installs the app again on a shop that had uninstalled it', function () {
     $shop = Shop::factory()->uninstalled()->create();
     Http::fake([
         "{$shop->domain}/admin/oauth/access_token" => Http::sequence()
-            ->push(['access_token' => 'shpat_offline', 'scope' => 'read_products'])
+            ->push(offlineAccessToken())
             ->push(onlineAccessToken()),
     ]);
 
@@ -110,6 +131,58 @@ it('installs the app again on a shop that had uninstalled it', function () {
     expect($shop->isInstalled())->toBeTrue()
         ->and($shop->access_token)->toBe('shpat_offline')
         ->and($shop->uninstalled_at)->toBeNull();
+});
+
+it('refreshes an expiring access token when the merchant opens the app', function () {
+    $this->freezeSecond();
+    $user = User::factory()->for(Shop::factory()->expiring())->create();
+    $refreshToken = $user->shop->refresh_token;
+    Http::fake([
+        "{$user->shop->domain}/admin/oauth/access_token" => Http::response([
+            'access_token' => 'shpat_refreshed',
+            'scope' => 'read_products',
+            'expires_in' => 3600,
+            'refresh_token' => 'refresh-2',
+            'refresh_token_expires_in' => 7776000,
+        ]),
+    ]);
+
+    $this->withToken(idToken($user->shop->domain, ['sub' => (string) $user->shopify_id]))
+        ->get(route('home'))
+        ->assertOk();
+
+    $shop = $user->shop->refresh();
+    expect($shop->access_token)->toBe('shpat_refreshed')
+        ->and($shop->access_token_expires_at)->toEqual(now()->addHour())
+        ->and($shop->refresh_token)->toBe('refresh-2');
+    Http::assertSent(fn (Request $request) => $request['grant_type'] === 'refresh_token'
+        && $request['refresh_token'] === $refreshToken);
+    Http::assertSentCount(1);
+});
+
+it('installs the app again when Shopify rejects the refresh token', function () {
+    $this->freezeSecond();
+    $user = User::factory()->for(Shop::factory()->expiring())->create();
+    Event::fake([ShopInstalled::class]);
+    Http::fake([
+        "{$user->shop->domain}/admin/oauth/access_token" => Http::sequence()
+            ->push(['error' => 'invalid_request', 'error_description' => 'This request requires an active refresh_token'], 401)
+            ->push(offlineAccessToken()),
+    ]);
+
+    $this->withToken(idToken($user->shop->domain, ['sub' => (string) $user->shopify_id]))
+        ->get(route('home'))
+        ->assertOk();
+
+    $shop = $user->shop->refresh();
+    expect($shop->access_token)->toBe('shpat_offline')
+        ->and($shop->refresh_token)->toBe('refresh-1')
+        ->and($shop->installed_at)->toEqual(now());
+    Event::assertDispatched(ShopInstalled::class, fn (ShopInstalled $event) => $event->shop->is($shop));
+    Http::assertSentInOrder([
+        fn (Request $request) => $request['grant_type'] === 'refresh_token',
+        fn (Request $request) => $request['requested_token_type'] === 'urn:shopify:params:oauth:token-type:offline-access-token',
+    ]);
 });
 
 it('refreshes the staff member from Shopify once their access token has expired', function () {

@@ -2,6 +2,7 @@
 
 namespace App\Shopify;
 
+use App\Exceptions\AccessTokenRevokedException;
 use App\Exceptions\InvalidIdTokenException;
 use App\Models\Shop;
 use App\Models\User;
@@ -52,14 +53,18 @@ final class IdTokenGuard
 
         $shop = Shop::firstOrNew(['domain' => $token->shop()]);
 
+        if ($shop->accessTokenIsExpiring()) {
+            $this->refresh($shop);
+        }
+
         if (! $shop->isInstalled()) {
-            $this->install($shop, $token);
+            $shop->install($this->exchange->offline($token));
         }
 
         $user = $shop->users()->firstOrNew(['shopify_id' => $token->user()]);
 
         if (! $user->hasValidAccessToken()) {
-            $this->refresh($user, $token);
+            $user->identify($this->exchange->online($token));
         }
 
         return $user->setRelation('shop', $shop);
@@ -86,43 +91,17 @@ final class IdTokenGuard
     }
 
     /**
-     * Exchange the ID token for an offline access token and install the shop.
-     */
-    protected function install(Shop $shop, IdToken $token): void
-    {
-        $grant = $this->exchange->offline($token);
-
-        $shop->install($grant['access_token'], $this->scopes($grant['scope']));
-    }
-
-    /**
-     * Exchange the ID token for an online access token and refresh the user's profile.
-     */
-    protected function refresh(User $user, IdToken $token): void
-    {
-        $grant = $this->exchange->online($token);
-
-        $user->forceFill([
-            'first_name' => $grant['associated_user']['first_name'],
-            'last_name' => $grant['associated_user']['last_name'],
-            'email' => $grant['associated_user']['email'],
-            'email_verified' => $grant['associated_user']['email_verified'],
-            'account_owner' => $grant['associated_user']['account_owner'],
-            'collaborator' => $grant['associated_user']['collaborator'],
-            'locale' => $grant['associated_user']['locale'],
-            'scopes' => $this->scopes($grant['associated_user_scope']),
-            'access_token' => $grant['access_token'],
-            'access_token_expires_at' => now()->addSeconds($grant['expires_in']),
-        ])->save();
-    }
-
-    /**
-     * Split the comma-separated list of scopes Shopify returns.
+     * Refresh the shop's expiring access token.
      *
-     * @return list<string>
+     * A refresh token Shopify no longer honors leaves the shop uninstalled,
+     * and since the merchant is present, the app is simply installed again.
      */
-    protected function scopes(string $scopes): array
+    protected function refresh(Shop $shop): void
     {
-        return array_values(array_filter(explode(',', $scopes)));
+        try {
+            $shop->refreshAccessToken();
+        } catch (AccessTokenRevokedException) {
+            //
+        }
     }
 }
