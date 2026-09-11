@@ -1,0 +1,9 @@
+# The Shopify CLI serves the app through a tunnel when running "shopify app dev".
+# It exports SHOPIFY_API_KEY, SHOPIFY_API_SECRET, APP_URL and SERVER_PORT for
+# the process below, which Laravel picks up over the values in ".env".
+
+roles = ["frontend", "backend"]
+webhooks_path = "/webhooks"
+
+[commands]
+dev = "composer run dev"

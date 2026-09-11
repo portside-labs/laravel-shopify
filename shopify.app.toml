@@ -1,0 +1,39 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+#
+# Run "shopify app config link" to connect this file to an app in your Partner
+# Dashboard, then "shopify app deploy" to publish the configuration below.
+
+client_id = ""
+name = "Laravel Shopify"
+handle = "laravel-shopify"
+application_url = "https://example.com"
+embedded = true
+
+[build]
+automatically_update_urls_on_dev = true
+include_config_on_deploy = true
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = ""
+
+[auth]
+redirect_urls = ["https://example.com"]
+
+[webhooks]
+api_version = "2026-07"
+
+# Every webhook is delivered to the "/webhooks" endpoint and dispatched to the
+# job registered for its topic in "config/shopify.php".
+[[webhooks.subscriptions]]
+topics = ["app/uninstalled", "app/scopes_update"]
+uri = "/webhooks"
+
+# The compliance webhooks are mandatory for every app distributed by Shopify.
+[[webhooks.subscriptions]]
+compliance_topics = [
+    "customers/data_request",
+    "customers/redact",
+    "shop/redact",
+]
+uri = "/webhooks"

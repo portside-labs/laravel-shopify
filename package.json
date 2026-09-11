@@ -13,6 +13,8 @@
     "dependencies": {
         "@inertiajs/react": "^3.0.0",
         "@inertiajs/vite": "^3.0.0",
+        "@shopify/app-bridge-types": "^0.7.2",
+        "@shopify/polaris-types": "^1.0.7",
         "@tailwindcss/vite": "^4.1.11",
         "@types/react": "^19.2.0",
         "@types/react-dom": "^19.2.0",

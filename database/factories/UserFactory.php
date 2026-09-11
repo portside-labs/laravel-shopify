@@ -2,9 +2,9 @@
 
 namespace Database\Factories;
 
+use App\Models\Shop;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
 /**
@@ -13,11 +13,6 @@ use Illuminate\Support\Str;
 class UserFactory extends Factory
 {
     /**
-     * The current password being used by the factory.
-     */
-    protected static ?string $password;
-
-    /**
      * Define the model's default state.
      *
      * @return array<string, mixed>
@@ -25,21 +20,38 @@ class UserFactory extends Factory
     public function definition(): array
     {
         return [
-            'name' => fake()->name(),
+            'shop_id' => Shop::factory(),
+            'shopify_id' => fake()->unique()->randomNumber(8),
+            'first_name' => fake()->firstName(),
+            'last_name' => fake()->lastName(),
             'email' => fake()->unique()->safeEmail(),
-            'email_verified_at' => now(),
-            'password' => static::$password ??= Hash::make('password'),
-            'remember_token' => Str::random(10),
+            'email_verified' => true,
+            'account_owner' => false,
+            'collaborator' => false,
+            'locale' => 'en',
+            'scopes' => ['read_products'],
+            'access_token' => 'shpua_'.Str::random(32),
+            'access_token_expires_at' => now()->addDay(),
         ];
     }
 
     /**
-     * Indicate that the model's email address should be unverified.
+     * Indicate that the user owns the shop's Shopify account.
      */
-    public function unverified(): static
+    public function accountOwner(): static
     {
         return $this->state(fn (array $attributes) => [
-            'email_verified_at' => null,
+            'account_owner' => true,
+        ]);
+    }
+
+    /**
+     * Indicate that the user's online access token has expired.
+     */
+    public function expired(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'access_token_expires_at' => now()->subMinute(),
         ]);
     }
 }
