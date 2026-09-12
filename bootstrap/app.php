@@ -4,7 +4,7 @@ use App\Exceptions\AccessTokenRevokedException;
 use App\Http\Controllers\WebhookController;
 use App\Http\Middleware\AllowEmbeddingInShopifyAdmin;
 use App\Http\Middleware\HandleInertiaRequests;
-use App\Http\Middleware\VerifyWebhookSignature;
+use App\Http\Middleware\VerifyShopifyWebhookSignature;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -20,7 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
         then: function (): void {
             Route::post('/webhooks', WebhookController::class)
-                ->middleware(VerifyWebhookSignature::class)
+                ->middleware(VerifyShopifyWebhookSignature::class)
                 ->name('webhooks');
         },
     )

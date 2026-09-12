@@ -14,7 +14,7 @@ use Symfony\Component\HttpFoundation\Response;
  *
  * @see https://shopify.dev/docs/apps/build/webhooks/subscribe/https#step-5-verify-the-webhook
  */
-class VerifyWebhookSignature
+class VerifyShopifyWebhookSignature
 {
     /**
      * Handle an incoming request.

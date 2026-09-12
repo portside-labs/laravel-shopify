@@ -1,11 +1,13 @@
 {
     "$schema": "https://getcomposer.org/schema.json",
-    "name": "laravel/blank-react-starter-kit",
+    "name": "portside-labs/laravel-shopify",
     "type": "project",
-    "description": "The skeleton application for the Laravel framework.",
+    "description": "A Laravel starter kit for building Shopify apps.",
     "keywords": [
         "laravel",
-        "framework"
+        "framework",
+        "shopify",
+        "starter"
     ],
     "license": "MIT",
     "require": {
