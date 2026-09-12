@@ -11,7 +11,7 @@ export default defineConfig({
             input: ['resources/js/app.tsx'],
             refresh: true,
         }),
-        inertia(),
+        inertia({ ssr: false }),
         react(),
         babel({
             presets: [reactCompilerPreset()],

@@ -101,7 +101,7 @@ Authentication never depends on cookies. The session is only used for Inertia's 
 
 ### The frontend
 
-`resources/js/app.tsx` attaches the ID token to every Inertia request, routes clicks on the admin sidebar (`<s-app-nav>`) through Inertia, mirrors visits on the admin's loading bar, and shows flash data as toasts: `Inertia::flash('toast', 'Saved.')` from any controller becomes a native admin toast. Types for the web components come from `@shopify/polaris-types` and `@shopify/app-bridge-types`, and the `shopify` global exposes the App Bridge APIs.
+`resources/js/app.tsx` attaches the ID token to every Inertia request, routes clicks on the admin sidebar (`<s-app-nav>`) through Inertia, mirrors visits on the admin's loading bar, and shows flash data as toasts: `Inertia::flash('toast', 'Saved.')` from any controller becomes a native admin toast. Types for the web components come from `@shopify/polaris-types` and `@shopify/app-bridge-types`, and the `shopify` global exposes the App Bridge APIs. Server-side rendering is disabled: the app renders for signed-in merchants inside the admin, and App Bridge and Polaris only run in the browser.
 
 ## Building your app
 

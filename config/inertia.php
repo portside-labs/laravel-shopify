@@ -16,10 +16,11 @@ return [
     */
 
     'ssr' => [
-        'enabled' => true,
+        // The app renders for signed-in merchants inside the Shopify admin, and
+        // App Bridge and Polaris only run in the browser, so SSR is disabled.
+        'enabled' => (bool) env('INERTIA_SSR_ENABLED', false),
         'url' => 'http://127.0.0.1:13714',
         // 'bundle' => base_path('bootstrap/ssr/ssr.mjs'),
-
     ],
 
     /*
