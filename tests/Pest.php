@@ -1,5 +1,6 @@
 <?php
 
+use App\Shopify\AppConfiguration;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -94,4 +95,21 @@ function partnerSubscription(array $subscription = []): array
         ],
         ...$subscription,
     ]]];
+}
+
+/**
+ * Write a linked copy of shopify.app.toml to a temporary directory and use it in place of the app's own.
+ */
+function fakeAppConfiguration(?string $toml = null): AppConfiguration
+{
+    $directory = sys_get_temp_dir().'/laravel-shopify-'.Str::random(12);
+    mkdir($directory);
+
+    file_put_contents("{$directory}/shopify.app.toml", $toml ?? str_replace(
+        ['client_id = ""', 'https://example.com'],
+        ['client_id = "test-client-id"', 'https://app.example.test'],
+        (string) file_get_contents(base_path('shopify.app.toml')),
+    ));
+
+    return tap(new AppConfiguration("{$directory}/shopify.app.toml"), fn (AppConfiguration $app) => app()->instance(AppConfiguration::class, $app));
 }
