@@ -10,6 +10,6 @@
     </head>
     <body>
         {{-- App Bridge reloads the page named by the "shopify-reload" parameter with a fresh ID token. --}}
-        <p>Open {{ config('app.name', 'Laravel') }} from your Shopify admin.</p>
+        <p>{{ __('auth.open_from_admin', ['app' => config('app.name', 'Laravel')]) }}</p>
     </body>
 </html>

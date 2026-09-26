@@ -75,3 +75,23 @@ function idToken(
 
     return "{$header}.{$payload}.".$encode(hash_hmac('sha256', "{$header}.{$payload}", $clientSecret, true));
 }
+
+/**
+ * A Partner API response describing a shop's Shopify App Pricing subscription.
+ *
+ * @param  array<string, mixed>  $subscription
+ * @return array<string, mixed>
+ */
+function partnerSubscription(array $subscription = []): array
+{
+    return ['data' => ['activeSubscription' => [
+        'trialEndsAt' => null,
+        'cancelAtEndOfCycle' => false,
+        'currentBillingCycle' => ['endTime' => '2026-10-01T00:00:00Z'],
+        'items' => [
+            ['handle' => 'usage', 'price' => ['__typename' => 'TieredPrice']],
+            ['handle' => 'pro', 'price' => ['__typename' => 'FlatRatePrice']],
+        ],
+        ...$subscription,
+    ]]];
+}

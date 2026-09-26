@@ -3,7 +3,9 @@
 namespace App\Models;
 
 use App\Shopify\AdminApi;
+use App\Support\Locale;
 use Database\Factories\UserFactory;
+use Illuminate\Contracts\Translation\HasLocalePreference;
 use Illuminate\Database\Eloquent\Attributes\Appends;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -39,7 +41,7 @@ use LogicException;
 #[Fillable(['shopify_id'])]
 #[Hidden(['access_token'])]
 #[Appends(['name'])]
-class User extends Authenticatable
+class User extends Authenticatable implements HasLocalePreference
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
@@ -122,6 +124,16 @@ class User extends Authenticatable
         }
 
         return new AdminApi($this->shop->domain, (string) $this->access_token, revoked: fn () => $this->forgetAccessToken());
+    }
+
+    /**
+     * The supported locale closest to the language the staff member reads the admin in.
+     *
+     * Laravel sends the staff member's mail and notifications in it as well.
+     */
+    public function preferredLocale(): ?string
+    {
+        return Locale::match($this->locale);
     }
 
     /**

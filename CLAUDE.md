@@ -216,3 +216,13 @@ This application is an embedded Shopify app, rendered inside the Shopify admin's
 - Call the Admin API through `$request->shop()->api()->graphql()` (offline token, acts as the shop) or `$request->user()->api()->graphql()` (online token, limited to the staff member's permissions). Offline tokens are Shopify's expiring kind (one hour, with a ninety-day refresh token); `Shop::api()` and the guard refresh them automatically, and a rejected refresh token, or a 401 from the Admin API, forgets the tokens and answers the request as unauthenticated so the app reloads and installs itself again.
 - Webhooks are subscribed in `shopify.app.toml`, verified by `App\Http\Middleware\VerifyShopifyWebhookSignature`, and dispatched to the queued job mapped to their topic in `config/shopify.php`. Add a topic to both places when subscribing to a new webhook. The three compliance webhooks and `app/uninstalled` are configured and must remain.
 - Sessions are only used for Inertia's validation errors and flash data; the session cookie is `SameSite=None; Secure; Partitioned` so it works inside the admin iframe.
+
+## Translations
+
+- Every user-facing string lives in the language files in `lang/{locale}/` and nowhere else. The server reads them with `__()`; the frontend receives the same catalog through the `translations` shared prop and reads it with react-i18next's `useTranslation()`, `t()`, and `<Trans>`, using the same dotted keys, `:placeholder` syntax, and `singular|plural` forms Laravel uses. Never hard-code text in a page or component, never keep a second set of frontend translations, and never add another i18n library.
+- Supported locales are listed in `app.locales` in `config/app.php`. `App\Http\Middleware\SetLocale` matches Shopify's `locale` parameter to them and remembers the choice on the user, whose `preferredLocale()` Laravel also uses for mail and notifications.
+
+## Billing
+
+- Plans are sold through Shopify App Pricing: they are configured in the Partner Dashboard and read back through the Partner API (`App\Shopify\PartnerApi`). Never use the Admin Billing API (`appSubscriptionCreate`, `appPurchaseOneTimeCreate`, and the like) or create charges from the app.
+- Gate paid routes with the `subscribed` middleware (`subscribed:pro` for one plan in particular), check plans with `$shop->subscribed()`, `$shop->onTrial()`, and `$shop->subscription()`, and send merchants to `$shop->planSelectionUrl()` opened with `target="_top"`, since Shopify hosts that page outside the app's frame. Each plan's welcome link in the Partner Dashboard is `/billing/welcome`, handled by `App\Http\Controllers\Billing\WelcomeController`.

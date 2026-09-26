@@ -38,6 +38,38 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | App Identity
+    |--------------------------------------------------------------------------
+    |
+    | The handle names the app in admin URLs, such as the plan selection page
+    | Shopify hosts, and matches the one in "shopify.app.toml". The numeric
+    | ID is shown in the Partner Dashboard; subscriptions are keyed on it.
+    |
+    */
+
+    'app_handle' => env('SHOPIFY_APP_HANDLE'),
+
+    'app_id' => env('SHOPIFY_APP_ID'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Partner API
+    |--------------------------------------------------------------------------
+    |
+    | Plans are sold through Shopify App Pricing, and a shop's subscription is
+    | read back through the Partner API rather than the Admin API. Create an
+    | API client with the "Manage apps" permission in the Partner Dashboard;
+    | the organization ID is the number in the dashboard's URL.
+    |
+    */
+
+    'partner' => [
+        'organization_id' => env('SHOPIFY_PARTNER_ORGANIZATION_ID'),
+        'access_token' => env('SHOPIFY_PARTNER_ACCESS_TOKEN'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Webhooks
     |--------------------------------------------------------------------------
     |

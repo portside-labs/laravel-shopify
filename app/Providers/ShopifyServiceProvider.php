@@ -24,5 +24,12 @@ class ShopifyServiceProvider extends ServiceProvider
 
             return $user instanceof User ? $user->shop : null;
         });
+
+        // A redirect followed inside the app's frame must carry on the parameters
+        // Shopify loaded the app with, so the next page can authenticate itself.
+        Request::macro('shopifyContext', function (): array {
+            /** @var Request $this */
+            return $this->only(['shop', 'host', 'embedded', 'locale', 'id_token']);
+        });
     }
 }

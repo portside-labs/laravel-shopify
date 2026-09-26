@@ -3,7 +3,9 @@
 use App\Exceptions\AccessTokenRevokedException;
 use App\Http\Controllers\WebhookController;
 use App\Http\Middleware\AllowEmbeddingInShopifyAdmin;
+use App\Http\Middleware\EnsureShopIsSubscribed;
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\SetLocale;
 use App\Http\Middleware\VerifyShopifyWebhookSignature;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
@@ -28,9 +30,14 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->trustProxies(at: '*');
 
         $middleware->web(append: [
+            SetLocale::class,
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
             AllowEmbeddingInShopifyAdmin::class,
+        ]);
+
+        $middleware->alias([
+            'subscribed' => EnsureShopIsSubscribed::class,
         ]);
 
         // Pages opened without a valid ID token bounce through App Bridge to get one...

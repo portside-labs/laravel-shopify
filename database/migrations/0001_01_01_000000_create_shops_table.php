@@ -21,6 +21,15 @@ return new class extends Migration
             $table->json('scopes')->nullable();
             $table->timestamp('installed_at')->nullable();
             $table->timestamp('uninstalled_at')->nullable();
+            $table->unsignedBigInteger('shopify_id')->nullable()->unique();
+
+            // What Shopify App Pricing last said about the shop's plan. The
+            // Partner API is asked again once this is a few minutes old.
+            $table->string('plan')->nullable();
+            $table->timestamp('trial_ends_at')->nullable();
+            $table->timestamp('current_period_ends_at')->nullable();
+            $table->boolean('cancels_at_period_end')->default(false);
+            $table->timestamp('subscription_synced_at')->nullable();
             $table->timestamps();
         });
 

@@ -82,6 +82,19 @@ return [
 
     'fallback_locale' => env('APP_FALLBACK_LOCALE', 'en'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Supported Locales
+    |--------------------------------------------------------------------------
+    |
+    | The locales the application is translated into, each with its language
+    | files in the "lang" directory. Shopify names the language a staff member
+    | reads the admin in, and the closest locale listed here is used for them.
+    |
+    */
+
+    'locales' => ['en'],
+
     'faker_locale' => env('APP_FAKER_LOCALE', 'en_US'),
 
     /*

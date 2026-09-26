@@ -20,6 +20,7 @@ class ShopFactory extends Factory
     {
         return [
             'domain' => Str::slug(fake()->unique()->company()).'.myshopify.com',
+            'shopify_id' => fake()->unique()->randomNumber(9),
             'access_token' => 'shpat_'.Str::random(32),
             'access_token_expires_at' => now()->addHour(),
             'refresh_token' => Str::random(64),
@@ -28,6 +29,18 @@ class ShopFactory extends Factory
             'installed_at' => now(),
             'uninstalled_at' => null,
         ];
+    }
+
+    /**
+     * Indicate that the shop is on a plan, as confirmed with Shopify just now.
+     */
+    public function subscribed(string $plan = 'basic'): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'plan' => $plan,
+            'current_period_ends_at' => now()->addMonth(),
+            'subscription_synced_at' => now(),
+        ]);
     }
 
     /**

@@ -1,5 +1,7 @@
 import AppLayout from '@/layouts/app-layout';
+import { configureI18n } from '@/lib/i18n';
 import { createInertiaApp, http, router } from '@inertiajs/react';
+import { createRoot } from 'react-dom/client';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 
@@ -50,4 +52,14 @@ void createInertiaApp({
     title: (title) => (title ? `${title} - ${appName}` : appName),
     layout: () => AppLayout,
     progress: false,
+    setup({ el, App, props }) {
+        if (!el) return;
+
+        // Laravel shares the translations for its locale once per page load,
+        // and the app has to know them before the first page renders.
+        const { locale, translations } = props.initialPage.props;
+
+        configureI18n(locale, translations);
+        createRoot(el).render(<App {...props} />);
+    },
 });

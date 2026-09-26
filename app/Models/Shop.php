@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Events\ShopInstalled;
 use App\Events\ShopUninstalled;
 use App\Exceptions\AccessTokenRevokedException;
+use App\Models\Concerns\Billable;
 use App\Shopify\AdminApi;
 use App\Shopify\TokenExchange;
 use Database\Factories\ShopFactory;
@@ -27,6 +28,12 @@ use LogicException;
  * @property list<string>|null $scopes
  * @property Carbon|null $installed_at
  * @property Carbon|null $uninstalled_at
+ * @property int|null $shopify_id
+ * @property string|null $plan
+ * @property Carbon|null $trial_ends_at
+ * @property Carbon|null $current_period_ends_at
+ * @property bool $cancels_at_period_end
+ * @property Carbon|null $subscription_synced_at
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
@@ -35,7 +42,16 @@ use LogicException;
 class Shop extends Model
 {
     /** @use HasFactory<ShopFactory> */
-    use HasFactory;
+    use Billable, HasFactory;
+
+    /**
+     * The model's default values for attributes.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'cancels_at_period_end' => false,
+    ];
 
     /**
      * The number of minutes before an access token expires that it is refreshed.
@@ -207,6 +223,11 @@ class Shop extends Model
             'scopes' => 'array',
             'installed_at' => 'datetime',
             'uninstalled_at' => 'datetime',
+            'shopify_id' => 'integer',
+            'trial_ends_at' => 'datetime',
+            'current_period_ends_at' => 'datetime',
+            'cancels_at_period_end' => 'boolean',
+            'subscription_synced_at' => 'datetime',
         ];
     }
 }

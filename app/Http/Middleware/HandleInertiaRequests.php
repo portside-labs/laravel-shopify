@@ -2,7 +2,9 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\TranslationCatalog;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
 use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
@@ -38,10 +40,13 @@ class HandleInertiaRequests extends Middleware
         return [
             ...parent::share($request),
             'name' => config('app.name'),
+            'locale' => app()->getLocale(),
             'auth' => [
                 'user' => $request->user(),
                 'shop' => $request->shop(),
             ],
+            // One locale's worth of translations, sent once and remembered by the browser.
+            'translations' => Inertia::once(fn () => TranslationCatalog::for(app()->getLocale())),
         ];
     }
 }

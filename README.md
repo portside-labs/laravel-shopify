@@ -12,7 +12,9 @@ You get a working embedded app on Laravel, Inertia, and React whose pages are co
 - **Self-healing credentials.** When Shopify revokes a token, for example after an uninstall the app never heard about, the app forgets it, reloads, and installs itself again.
 - **Webhooks.** Deliveries are verified and handed to the job registered for their topic. The mandatory compliance topics, `app/uninstalled`, and `app/scopes_update` are configured out of the box.
 - **Polaris web components and App Bridge.** Pages use `<s-page>`, `<s-section>`, and friends. The admin's sidebar navigation, loading bar, and toasts are wired to Inertia.
-- **A test suite** covering the guard, token exchange, webhooks, and jobs, plus static analysis and formatting checks.
+- **Translations in one place.** The language files in `lang/` are read by `__()` on the server and by react-i18next in the browser, with Laravel's placeholder and plural syntax on both sides. The staff member's admin language is picked up from Shopify.
+- **Billing through Shopify App Pricing.** Plans are configured in the Partner Dashboard and sold by Shopify. The kit reads a shop's subscription from the Partner API, gates routes with a `subscribed` middleware, and provides the pricing page and the welcome link.
+- **A test suite** covering the guard, token exchange, webhooks, jobs, translations, and billing, plus static analysis and formatting checks.
 
 ## Requirements
 
@@ -103,11 +105,54 @@ Authentication never depends on cookies. The session is only used for Inertia's 
 
 `resources/js/app.tsx` attaches the ID token to every Inertia request, routes clicks on the admin sidebar (`<s-app-nav>`) through Inertia, mirrors visits on the admin's loading bar, and shows flash data as toasts: `Inertia::flash('toast', 'Saved.')` from any controller becomes a native admin toast. Types for the web components come from `@shopify/polaris-types` and `@shopify/app-bridge-types`, and the `shopify` global exposes the App Bridge APIs. Server-side rendering is disabled: the app renders for signed-in merchants inside the admin, and App Bridge and Polaris only run in the browser.
 
+### Translations
+
+The language files in `lang/` are the only place a string is written. `__('home.title')` reads them on the server, and the same catalog is shared with the frontend once per page load, where [react-i18next](https://react.i18next.com) reads it with the same keys, the same `:placeholder` syntax, and the same `singular|plural` forms:
+
+```tsx
+const { t } = useTranslation();
+
+t('home.welcome', { app: name });
+t('orders.count', { count: 3 }); // "{0} No orders|{1} One order|[2,*] :count orders"
+```
+
+Shopify names the staff member's admin language in the `locale` parameter when it loads the app. `App\Http\Middleware\SetLocale` matches it to the locales listed in `app.locales` in `config/app.php`, remembers it on the user, and sets the application locale for the request; `User::preferredLocale()` gives their mail and notifications the same language. To add a language, translate the files into `lang/{locale}` and add the locale to `app.locales`. Keys a translation is missing fall back to the fallback locale, entry by entry.
+
+### Billing with Shopify App Pricing
+
+Plans are configured in the Partner Dashboard and sold by Shopify, so the kit contains no billing API calls of its own; it only asks Shopify which plan a shop is on. Set the app's handle and ID, and create a Partner API client with the "Manage apps" permission:
+
+```dotenv
+SHOPIFY_APP_HANDLE=my-app
+SHOPIFY_APP_ID=1234
+SHOPIFY_PARTNER_ORGANIZATION_ID=12345
+SHOPIFY_PARTNER_ACCESS_TOKEN=prtapi_...
+```
+
+Then add the `subscribed` middleware to the routes a plan pays for, or `subscribed:pro` to require one plan in particular:
+
+```php
+Route::get('/reports', ReportController::class)->middleware('subscribed');
+```
+
+A shop without a plan is sent to `/pricing`, which opens the plan selection page Shopify hosts in the admin. Once the merchant has approved a plan, Shopify sends them to the plan's welcome link, so set it to `/billing/welcome` on each plan in the Partner Dashboard; the app confirms the subscription with Shopify and shows a toast. `Shop` has a Cashier-like API for everything else:
+
+```php
+$shop->subscribed();          // on any active plan
+$shop->subscribed('pro');     // on this plan in particular
+$shop->onTrial();
+$shop->subscription()?->plan;
+$shop->planSelectionUrl();
+```
+
+Shopify sends no webhook when a subscription changes, so the answer is kept on the shop for five minutes and read from the Partner API again after that, which is how cancellations are noticed. Development stores in your Partner organization can take any plan for free while you test. Usage-based charges are reported through Shopify's App Events API, which the kit leaves to you.
+
 ## Building your app
 
 - Add pages to `resources/js/pages` and compose them from Polaris web components. Link to routes with the Wayfinder helpers generated in `resources/js/routes`.
 - Register routes in `routes/web.php` behind the `auth` middleware.
 - Authorize actions with policies. `$user->account_owner`, `$user->collaborator`, and `$user->scopes` are available for that.
+- Put every string in `lang/` and read it with `__()` or `t()`; never hard-code text in a page.
 - Listen for `App\Events\ShopInstalled` and `App\Events\ShopUninstalled` to run onboarding or cleanup.
 - Run the checks: `composer test` runs Pint, PHPStan, and the test suite, and `npm run check` lints and formats the frontend.
 
@@ -115,7 +160,7 @@ Authentication never depends on cookies. The session is only used for Inertia's 
 
 - Serve the app over HTTPS. Proxies are trusted so URLs are generated correctly behind a load balancer or tunnel.
 - Run a queue worker; webhooks are processed by queued jobs.
-- Set `APP_URL`, `SHOPIFY_API_KEY`, `SHOPIFY_API_SECRET`, and review `SHOPIFY_API_VERSION` in `config/shopify.php` each quarter.
+- Set `APP_URL`, `SHOPIFY_API_KEY`, `SHOPIFY_API_SECRET`, and review `SHOPIFY_API_VERSION` in `config/shopify.php` each quarter. If you sell plans, set `SHOPIFY_APP_HANDLE`, `SHOPIFY_APP_ID`, `SHOPIFY_PARTNER_ORGANIZATION_ID`, and `SHOPIFY_PARTNER_ACCESS_TOKEN` too.
 - Point `application_url` and `redirect_urls` in `shopify.app.toml` at your domain and run `shopify app deploy`.
 
 ## Working with AI agents
