@@ -15,6 +15,10 @@
 
 A starter kit for building embedded Shopify apps the Laravel way: Laravel, Inertia, and React, with pages built from Shopify's Polaris web components so they feel native in the admin.
 
+<p align="center">
+  <img src=".github/art/screenshot.png" alt="The Laravel Shopify home page inside the Shopify admin" width="900">
+</p>
+
 ## What's included
 
 - **Authentication as a Laravel guard.** App Bridge ID tokens are verified on every request. `$request->user()` is the staff member, `$request->shop()` is their store, and routes are protected with `auth`.
