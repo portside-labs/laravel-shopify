@@ -43,33 +43,34 @@ npm install
 1. Create an app in the Dev Dashboard.
 2. Link it and pull its credentials into `.env`:
 
-   ```bash
-   php artisan shopify:install
-   ```
+    ```bash
+    php artisan shopify:install
+    ```
 
-   This runs `shopify app config link` and `shopify app env pull`, then checks the configuration. If linking dropped the webhook subscriptions from `shopify.app.toml`, restore them from git.
+    This runs `shopify app config link` and `shopify app env pull`, then checks the configuration. If linking dropped the webhook subscriptions from `shopify.app.toml`, restore them from git.
+
 3. Set your access scopes in `shopify.app.toml` and release the configuration:
 
-   ```bash
-   shopify app deploy
-   ```
+    ```bash
+    shopify app deploy
+    ```
 
 4. Start the app:
 
-   ```bash
-   shopify app dev
-   ```
+    ```bash
+    shopify app dev
+    ```
 
-   The CLI opens a tunnel, runs `composer run dev` (server, queue worker, and Vite), and prints a link that installs the app on your development store.
+    The CLI opens a tunnel, runs `composer run dev` (server, queue worker, and Vite), and prints a link that installs the app on your development store.
 
 ## Artisan commands
 
-| Command | What it does |
-| --- | --- |
-| `shopify:install` | Links the app and writes its credentials to `.env`. |
-| `shopify:doctor` | Checks credentials, URLs, API version, webhooks, and billing settings. Fails on errors, so it can run in CI. |
-| `make:shopify-webhook orders/create` | Creates the job and a test, maps the topic in `config/shopify.php`, and subscribes to it in `shopify.app.toml`. |
-| `shopify:webhook orders/create` | Sends a signed webhook to the app in-process, with no tunnel needed. Use `--sync` to run the job immediately and `--payload=file.json` to send your own payload. |
+| Command                              | What it does                                                                                                                                                     |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `shopify:install`                    | Links the app and writes its credentials to `.env`.                                                                                                              |
+| `shopify:doctor`                     | Checks credentials, URLs, API version, webhooks, and billing settings. Fails on errors, so it can run in CI.                                                     |
+| `make:shopify-webhook orders/create` | Creates the job and a test, maps the topic in `config/shopify.php`, and subscribes to it in `shopify.app.toml`.                                                  |
+| `shopify:webhook orders/create`      | Sends a signed webhook to the app in-process, with no tunnel needed. Use `--sync` to run the job immediately and `--payload=file.json` to send your own payload. |
 
 ## Using the kit
 
