@@ -1,4 +1,17 @@
-# Laravel Shopify
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/art/logo-dark.svg">
+    <img src=".github/art/logo-light.svg" alt="Laravel Shopify" width="360">
+  </picture>
+</p>
+
+<p align="center">
+  <a href="https://github.com/portside-labs/laravel-shopify/actions/workflows/tests.yml"><img src="https://github.com/portside-labs/laravel-shopify/actions/workflows/tests.yml/badge.svg" alt="Tests"></a>
+  <a href="https://packagist.org/packages/portside-labs/laravel-shopify"><img src="https://img.shields.io/packagist/v/portside-labs/laravel-shopify" alt="Latest version"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/packagist/l/portside-labs/laravel-shopify" alt="License"></a>
+</p>
+
+## About Laravel Shopify
 
 A starter kit for building embedded Shopify apps the Laravel way: Laravel, Inertia, and React, with pages built from Shopify's Polaris web components so they feel native in the admin.
 
