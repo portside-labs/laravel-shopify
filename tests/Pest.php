@@ -98,18 +98,50 @@ function partnerSubscription(array $subscription = []): array
 }
 
 /**
- * Write a linked copy of shopify.app.toml to a temporary directory and use it in place of the app's own.
+ * Write an app configuration file to a temporary directory and use it in place of the app's own.
+ *
+ * The default is the kit's shopify.app.toml, linked to the test app. It is
+ * written out here rather than read from the project, which the Shopify CLI
+ * rewrites with the developer's own app when linking it.
  */
 function fakeAppConfiguration(?string $toml = null): AppConfiguration
 {
     $directory = sys_get_temp_dir().'/laravel-shopify-'.Str::random(12);
     mkdir($directory);
 
-    file_put_contents("{$directory}/shopify.app.toml", $toml ?? str_replace(
-        ['client_id = ""', 'https://example.com'],
-        ['client_id = "test-client-id"', 'https://app.example.test'],
-        (string) file_get_contents(base_path('shopify.app.toml')),
-    ));
+    file_put_contents("{$directory}/shopify.app.toml", $toml ?? <<<'TOML'
+        client_id = "test-client-id"
+        name = "Laravel Shopify"
+        handle = "laravel-shopify"
+        application_url = "https://app.example.test"
+        embedded = true
+
+        [build]
+        automatically_update_urls_on_dev = true
+        include_config_on_deploy = true
+
+        [access_scopes]
+        scopes = ""
+        use_legacy_install_flow = false
+
+        [auth]
+        redirect_urls = ["https://app.example.test"]
+
+        [webhooks]
+        api_version = "2026-07"
+
+        [[webhooks.subscriptions]]
+        topics = ["app/uninstalled", "app/scopes_update"]
+        uri = "/webhooks"
+
+        [[webhooks.subscriptions]]
+        compliance_topics = [
+            "customers/data_request",
+            "customers/redact",
+            "shop/redact",
+        ]
+        uri = "/webhooks"
+        TOML);
 
     return tap(new AppConfiguration("{$directory}/shopify.app.toml"), fn (AppConfiguration $app) => app()->instance(AppConfiguration::class, $app));
 }

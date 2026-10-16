@@ -34,19 +34,18 @@ class ShopifyInstall extends Command
             return self::FAILURE;
         }
 
-        // Linking fetches the app's configuration from the Dev Dashboard into shopify.app.toml...
-        if ($app->clientId() === null || $this->confirm("shopify.app.toml is linked to the app {$app->clientId()}. Link it to a different app?", false)) {
-            $clientId = $this->option('client-id');
+        $file = basename($app->path());
+        $config = config('shopify.app_config') ? ['--config', (string) config('shopify.app_config')] : [];
 
-            if (! $this->shopify(['app', 'config', 'link', ...($clientId ? ['--client-id', $clientId] : [])])) {
+        // Linking fetches the app's configuration from the Dev Dashboard...
+        if ($app->clientId() === null || $this->confirm("{$file} is linked to the app {$app->clientId()}. Link it to a different app?", false)) {
+            if (! $app = $this->link($app)) {
                 return self::FAILURE;
             }
-
-            $app = new AppConfiguration($app->path());
         }
 
         // ...and pulling writes its client ID, secret, and scopes into .env.
-        if (! $this->shopify(['app', 'env', 'pull', '--env-file', $environmentFile])) {
+        if (! $this->shopify(['app', 'env', 'pull', ...$config, '--env-file', $environmentFile])) {
             return self::FAILURE;
         }
 
@@ -68,6 +67,34 @@ class ShopifyInstall extends Command
         $this->laravel->instance(AppConfiguration::class, $app);
 
         return $this->call('shopify:doctor');
+    }
+
+    /**
+     * Link the configuration file to an app, keeping the kit's webhooks and settings.
+     *
+     * The CLI rewrites the file from the app's copy in the Dev Dashboard, so the
+     * kit's own "shopify.app.toml" is kept aside first and the linked app's
+     * client ID, name, handle, URLs, and scopes are written back into it.
+     */
+    private function link(AppConfiguration $app): ?AppConfiguration
+    {
+        $template = tempnam(sys_get_temp_dir(), 'shopify-app');
+        copy(dirname($app->path()).'/shopify.app.toml', $template);
+
+        try {
+            $clientId = $this->option('client-id');
+            $file = basename($app->path());
+
+            if (! $this->shopify(['app', 'config', 'link', ...($clientId ? ['--client-id', $clientId] : []), ...($file === 'shopify.app.toml' ? [] : ['--file-name', $file])])) {
+                return null;
+            }
+
+            file_put_contents($app->path(), (new AppConfiguration($template))->linkedTo(new AppConfiguration($app->path())));
+        } finally {
+            unlink($template);
+        }
+
+        return new AppConfiguration($app->path());
     }
 
     /**

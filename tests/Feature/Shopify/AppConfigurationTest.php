@@ -53,6 +53,51 @@ it('subscribes the app to a webhook topic', function () {
         ->and(new AppConfiguration($app->path()))->webhookSubscriptions()->toHaveCount(6);
 });
 
+it('takes a linked app\'s identity, URLs, and scopes while keeping the kit\'s settings', function () {
+    $kit = fakeAppConfiguration();
+    $linked = fakeAppConfiguration(<<<'TOML'
+        client_id = "abc123"
+        name = "My App"
+        application_url = "https://my-app.example.test"
+
+        [webhooks]
+        api_version = "2026-07"
+
+        [[webhooks.subscriptions]]
+        topics = ["app/uninstalled"]
+        uri = "https://elsewhere.example.test/webhooks"
+
+        [access_scopes]
+        scopes = "read_orders,write_products"
+
+        [auth]
+        redirect_urls = [
+          "https://my-app.example.test",
+          "https://my-app.example.test/callback",
+        ]
+        TOML);
+
+    $merged = fakeAppConfiguration($kit->linkedTo($linked));
+
+    expect($merged->clientId())->toBe('abc123')
+        ->and($merged->get('name'))->toBe('My App')
+        ->and($merged->handle())->toBeNull()
+        ->and($merged->applicationUrl())->toBe('https://my-app.example.test')
+        ->and($merged->get('auth.redirect_urls'))->toBe(['https://my-app.example.test', 'https://my-app.example.test/callback'])
+        ->and($merged->scopes())->toBe(['read_orders', 'write_products'])
+        ->and($merged->get('build.automatically_update_urls_on_dev'))->toBeTrue()
+        ->and($merged->webhookSubscriptions())->toHaveCount(5)
+        ->and($merged->webhookSubscriptions()['app/uninstalled']['uri'])->toBe('/webhooks');
+});
+
+it('keeps the kit\'s scopes when the linked app has none', function () {
+    $kit = fakeAppConfiguration(str_replace('scopes = ""', 'scopes = "read_products"', (string) file_get_contents(fakeAppConfiguration()->path())));
+
+    $merged = fakeAppConfiguration($kit->linkedTo(fakeAppConfiguration('client_id = "abc123"')));
+
+    expect($merged->scopes())->toBe(['read_products']);
+});
+
 it('reads nothing from a file that does not exist', function () {
     $app = new AppConfiguration('/missing/shopify.app.toml');
 

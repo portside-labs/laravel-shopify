@@ -53,6 +53,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | App Configuration File
+    |--------------------------------------------------------------------------
+    |
+    | The Shopify CLI reads the app's configuration from "shopify.app.toml".
+    | Name another one here, such as "dev" for "shopify.app.dev.toml", to
+    | link and serve a different app, and the Artisan commands follow it.
+    |
+    */
+
+    'app_config' => env('SHOPIFY_APP_CONFIG'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Partner API
     |--------------------------------------------------------------------------
     |

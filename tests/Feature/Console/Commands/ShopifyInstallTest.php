@@ -1,5 +1,6 @@
 <?php
 
+use App\Shopify\AppConfiguration;
 use Illuminate\Process\PendingProcess;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Str;
@@ -19,8 +20,21 @@ it('links the app, pulls its credentials into .env, and checks the configuration
 
     Process::fake([
         '*shopify*version*' => Process::result('3.80.0'),
+        // The CLI rewrites the file from the Dev Dashboard, dropping the kit's webhooks and settings...
         '*shopify*config*link*' => function () use ($app) {
-            file_put_contents($app->path(), str_replace('client_id = ""', 'client_id = "test-client-id"', (string) file_get_contents($app->path())));
+            file_put_contents($app->path(), <<<'TOML'
+                client_id = "test-client-id"
+                name = "My App"
+                handle = "laravel-shopify"
+                application_url = "https://my-app.example.test"
+                embedded = true
+
+                [access_scopes]
+                scopes = "write_products"
+
+                [auth]
+                redirect_urls = [ "https://my-app.example.test" ]
+                TOML);
 
             return Process::result();
         },
@@ -39,6 +53,39 @@ it('links the app, pulls its credentials into .env, and checks the configuration
     Process::assertRan(fn (PendingProcess $process) => $process->command === ['shopify', 'app', 'config', 'link', '--client-id', 'test-client-id']);
     Process::assertRan(fn (PendingProcess $process) => $process->command === ['shopify', 'app', 'env', 'pull', '--env-file', "{$this->directory}/.env"]);
     expect(file_get_contents("{$this->directory}/.env"))->toContain('SHOPIFY_APP_HANDLE="laravel-shopify"');
+
+    $linked = new AppConfiguration($app->path());
+    expect($linked->get('name'))->toBe('My App')
+        ->and($linked->applicationUrl())->toBe('https://my-app.example.test')
+        ->and($linked->scopes())->toBe(['write_products'])
+        ->and($linked->get('build.include_config_on_deploy'))->toBeTrue()
+        ->and($linked->webhookSubscriptions())->toHaveCount(5);
+});
+
+it('links a named configuration and leaves the kit\'s own alone', function () {
+    $template = fakeAppConfiguration();
+    $kit = (string) file_get_contents($template->path());
+    $app = new AppConfiguration(dirname($template->path()).'/shopify.app.dev.toml');
+    $this->app->instance(AppConfiguration::class, $app);
+    config()->set('shopify.app_config', 'dev');
+
+    Process::fake([
+        '*shopify*version*' => Process::result(),
+        '*shopify*config*link*' => function () use ($app) {
+            file_put_contents($app->path(), "client_id = \"test-client-id\"\nname = \"Dev App\"\n");
+
+            return Process::result();
+        },
+        '*shopify*env*pull*' => Process::result(),
+    ]);
+
+    $this->artisan('shopify:install')->assertSuccessful();
+
+    Process::assertRan(fn (PendingProcess $process) => $process->command === ['shopify', 'app', 'config', 'link', '--file-name', 'shopify.app.dev.toml']);
+    Process::assertRan(fn (PendingProcess $process) => array_slice((array) $process->command, 0, 5) === ['shopify', 'app', 'env', 'pull', '--config'] && $process->command[5] === 'dev');
+    expect(file_get_contents($template->path()))->toBe($kit)
+        ->and((new AppConfiguration($app->path()))->get('name'))->toBe('Dev App')
+        ->and((new AppConfiguration($app->path()))->webhookSubscriptions())->toHaveCount(5);
 });
 
 it('keeps the linked app unless asked to link another', function () {

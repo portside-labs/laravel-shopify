@@ -55,6 +55,12 @@
             "Composer\\Config::disableProcessTimeout",
             "@php artisan dev"
         ],
+        "dev:shopify": [
+            "Composer\\Config::disableProcessTimeout",
+            "@putenv APP_ENV",
+            "@php artisan shopify:record-app-url",
+            "@php artisan dev"
+        ],
         "lint": [
             "pint --parallel"
         ],
@@ -68,7 +74,7 @@
             "@test"
         ],
         "types:check": [
-            "phpstan analyse"
+            "phpstan analyse --memory-limit=1G"
         ],
         "test": [
             "@php artisan config:clear --ansi",

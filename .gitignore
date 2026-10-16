@@ -26,3 +26,6 @@ yarn-error.log
 /.nova
 /.vscode
 /.zed
+
+# The Shopify app you develop the kit against, linked with SHOPIFY_APP_CONFIG=dev
+shopify.app.dev.toml

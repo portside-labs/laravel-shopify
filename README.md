@@ -51,7 +51,7 @@ npm install
     php artisan shopify:install
     ```
 
-    This runs `shopify app config link` and `shopify app env pull`, then checks the configuration. If linking dropped the webhook subscriptions from `shopify.app.toml`, restore them from git.
+    This runs `shopify app config link` and `shopify app env pull`, then checks the configuration. Linking keeps the kit's webhook subscriptions and settings in `shopify.app.toml` and fills in your app's client ID, name, URLs, and scopes.
 
 3. Set your access scopes in `shopify.app.toml` and release the configuration:
 
@@ -62,16 +62,19 @@ npm install
 4. Start the app:
 
     ```bash
-    shopify app dev
+    php artisan shopify:dev
     ```
 
-    The CLI opens a tunnel, runs `composer run dev` (server, queue worker, and Vite), and prints a link that installs the app on your development store.
+    This runs `shopify app dev`, which opens a free Cloudflare tunnel (no account needed), starts the server, queue worker, and Vite, and prints a link that installs the app on your development store. `APP_URL` in `.env` is updated to the tunnel's URL. To use your own tunnel instead, pass it with `--tunnel-url=https://my-app.ngrok.dev` and forward it to `localhost:3000`, or add another port to the URL.
+
+To keep `shopify.app.toml` untouched, for example while working on the kit itself, set `SHOPIFY_APP_CONFIG=dev` in `.env`. The commands and the CLI then use `shopify.app.dev.toml`, which git ignores.
 
 ## Artisan commands
 
 | Command                              | What it does                                                                                                                                                     |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `shopify:install`                    | Links the app and writes its credentials to `.env`.                                                                                                              |
+| `shopify:dev`                        | Serves the app through a tunnel and updates `APP_URL`. Local environment only. Use `--tunnel-url` for your own tunnel.                                           |
 | `shopify:doctor`                     | Checks credentials, URLs, API version, webhooks, and billing settings. Fails on errors, so it can run in CI.                                                     |
 | `make:shopify-webhook orders/create` | Creates the job and a test, maps the topic in `config/shopify.php`, and subscribes to it in `shopify.app.toml`.                                                  |
 | `shopify:webhook orders/create`      | Sends a signed webhook to the app in-process, with no tunnel needed. Use `--sync` to run the job immediately and `--payload=file.json` to send your own payload. |

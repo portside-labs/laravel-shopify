@@ -33,7 +33,15 @@ class AppConfiguration
      */
     public function __construct(?string $path = null)
     {
-        $this->path = $path ?? base_path('shopify.app.toml');
+        $this->path = $path ?? base_path(self::fileName(config('shopify.app_config')));
+    }
+
+    /**
+     * The file name of a named configuration, such as "shopify.app.dev.toml", or of the default one.
+     */
+    public static function fileName(?string $name): string
+    {
+        return $name ? "shopify.app.{$name}.toml" : 'shopify.app.toml';
     }
 
     /**
@@ -123,6 +131,40 @@ class AppConfiguration
     }
 
     /**
+     * The contents of this file with the identity, URLs, and scopes of a freshly linked app.
+     *
+     * Linking an app with the Shopify CLI rewrites its configuration file from
+     * the copy in the Dev Dashboard, which drops everything the kit sets up:
+     * its webhook subscriptions, build settings, and comments. This file
+     * keeps all of that, and only what belongs to the app is taken over.
+     */
+    public function linkedTo(AppConfiguration $linked): string
+    {
+        $contents = (string) file_get_contents($this->path);
+
+        $values = [
+            'client_id' => $linked->clientId() ?? '',
+            'name' => $linked->get('name'),
+            'handle' => $linked->handle(),
+            'application_url' => $linked->applicationUrl(),
+            'redirect_urls' => $linked->get('auth.redirect_urls'),
+            'scopes' => $linked->scopes() === [] ? null : implode(',', $linked->scopes()),
+        ];
+
+        foreach ($values as $key => $value) {
+            $pattern = '/^'.$key.'\s*=\s*(?:\[[^\]]*\]|.*)$\R?/m';
+
+            $contents = match (true) {
+                $value === null && $key === 'handle' => (string) preg_replace($pattern, '', $contents, 1),
+                $value === null => $contents,
+                default => (string) preg_replace_callback($pattern, fn () => "{$key} = ".$this->encode($value)."\n", $contents, 1),
+            };
+        }
+
+        return $contents;
+    }
+
+    /**
      * Subscribe the app to a webhook topic, delivered to the given URI.
      */
     public function subscribeToWebhook(string $topic, string $uri = '/webhooks'): void
@@ -143,6 +185,18 @@ class AppConfiguration
             TOML);
 
         $this->data = null;
+    }
+
+    /**
+     * Write a value as TOML.
+     */
+    private function encode(mixed $value): string
+    {
+        if (is_array($value)) {
+            return '['.implode(', ', array_map(fn (mixed $item) => $this->encode($item), $value)).']';
+        }
+
+        return is_string($value) ? (string) json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) : var_export($value, true);
     }
 
     /**
