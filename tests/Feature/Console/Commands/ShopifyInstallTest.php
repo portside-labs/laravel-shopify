@@ -52,7 +52,8 @@ it('links the app, pulls its credentials into .env, and checks the configuration
 
     Process::assertRan(fn (PendingProcess $process) => $process->command === ['shopify', 'app', 'config', 'link', '--client-id', 'test-client-id']);
     Process::assertRan(fn (PendingProcess $process) => $process->command === ['shopify', 'app', 'env', 'pull', '--env-file', "{$this->directory}/.env"]);
-    expect(file_get_contents("{$this->directory}/.env"))->toContain('SHOPIFY_APP_HANDLE="laravel-shopify"');
+    expect(file_get_contents("{$this->directory}/.env"))->toContain('SHOPIFY_APP_HANDLE="laravel-shopify"')
+        ->not->toContain('SHOPIFY_APP_CONFIG');
 
     $linked = new AppConfiguration($app->path());
     expect($linked->get('name'))->toBe('My App')
@@ -98,6 +99,45 @@ it('keeps the linked app unless asked to link another', function () {
 
     Process::assertDidntRun(fn (PendingProcess $process) => array_slice((array) $process->command, 0, 3) === ['shopify', 'app', 'config']);
     Process::assertRan(fn (PendingProcess $process) => array_slice((array) $process->command, 0, 3) === ['shopify', 'app', 'env']);
+});
+
+it('links shopify.app.dev.toml in the local environment, leaving the kit\'s configuration alone', function () {
+    $this->app['env'] = 'local';
+    $kit = fakeAppConfiguration();
+    $contents = file_get_contents($kit->path());
+    $devPath = dirname($kit->path()).'/shopify.app.dev.toml';
+
+    Process::fake([
+        '*shopify*config*link*' => function () use ($devPath) {
+            file_put_contents($devPath, "client_id = \"test-client-id\"\nname = \"Dev App\"\n");
+
+            return Process::result();
+        },
+        '*' => Process::result(),
+    ]);
+
+    $this->artisan('shopify:install')
+        ->expectsOutputToContain('Using dev for local development')
+        ->expectsOutputToContain('Next, run "php artisan shopify:dev".')
+        ->assertSuccessful();
+
+    Process::assertRan(fn (PendingProcess $process) => $process->command === ['shopify', 'app', 'config', 'link', '--file-name', 'shopify.app.dev.toml']);
+    Process::assertRan(fn (PendingProcess $process) => $process->command === ['shopify', 'app', 'env', 'pull', '--config', 'dev', '--env-file', "{$this->directory}/.env"]);
+    expect(file_get_contents("{$this->directory}/.env"))->toMatch('/^SHOPIFY_APP_CONFIG="?dev"?$/m')
+        ->and(file_get_contents($kit->path()))->toBe($contents)
+        ->and((new AppConfiguration($devPath))->webhookSubscriptions())->toHaveCount(5);
+});
+
+it('subscribes again to the default webhooks a linked app has lost', function () {
+    $app = fakeAppConfiguration("client_id = \"test-client-id\"\nname = \"My App\"\nhandle = \"laravel-shopify\"\napplication_url = \"https://my-app.example.test\"\n");
+    Process::fake(['*' => Process::result()]);
+
+    $this->artisan('shopify:install')
+        ->expectsConfirmation('shopify.app.toml is linked to the app test-client-id. Link it to a different app?', 'no')
+        ->expectsOutputToContain('Run "php artisan shopify:deploy --production" to release the configuration to Shopify.')
+        ->assertSuccessful();
+
+    expect((new AppConfiguration($app->path()))->webhookSubscriptions())->toHaveKeys(array_keys(AppConfiguration::DEFAULT_WEBHOOKS));
 });
 
 it('asks for the Shopify CLI when it is not installed', function () {

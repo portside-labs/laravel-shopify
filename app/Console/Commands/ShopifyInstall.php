@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Console\Commands\Concerns\UsesLocalAppConfiguration;
 use App\Shopify\AppConfiguration;
 use Dotenv\Dotenv;
 use Illuminate\Console\Attributes\Description;
@@ -14,6 +15,8 @@ use Illuminate\Support\Facades\Process;
 #[Description('Link the kit to a Shopify app and pull its credentials into .env')]
 class ShopifyInstall extends Command
 {
+    use UsesLocalAppConfiguration;
+
     /**
      * Execute the console command.
      */
@@ -34,8 +37,9 @@ class ShopifyInstall extends Command
             return self::FAILURE;
         }
 
+        $app = $this->useLocalAppConfiguration($app);
         $file = basename($app->path());
-        $config = config('shopify.app_config') ? ['--config', (string) config('shopify.app_config')] : [];
+        $config = $app->name() ? ['--config', $app->name()] : [];
 
         // Linking fetches the app's configuration from the Dev Dashboard...
         if ($app->clientId() === null || $this->confirm("{$file} is linked to the app {$app->clientId()}. Link it to a different app?", false)) {
@@ -43,6 +47,8 @@ class ShopifyInstall extends Command
                 return self::FAILURE;
             }
         }
+
+        $this->restoreDefaultWebhooks($app);
 
         // ...and pulling writes its client ID, secret, and scopes into .env.
         if (! $this->shopify(['app', 'env', 'pull', ...$config, '--env-file', $environmentFile])) {
@@ -66,7 +72,25 @@ class ShopifyInstall extends Command
 
         $this->laravel->instance(AppConfiguration::class, $app);
 
-        return $this->call('shopify:doctor');
+        $status = $this->call('shopify:doctor');
+
+        if ($status === self::SUCCESS && $this->laravel->isLocal()) {
+            $this->components->info('Next, run "php artisan shopify:dev". It serves the app through a tunnel, points its URLs at it, and installs it on your development store.');
+        }
+
+        return $status;
+    }
+
+    /**
+     * Subscribe again to the kit's default webhook topics if the configuration file has lost any.
+     */
+    private function restoreDefaultWebhooks(AppConfiguration $app): void
+    {
+        $topics = $app->subscribeToDefaultWebhooks((string) config('shopify.api_version'));
+
+        if ($topics !== []) {
+            $this->components->info('Subscribed to '.implode(', ', $topics).' in '.basename($app->path()).'. '.$app->releaseInstruction().'.');
+        }
     }
 
     /**

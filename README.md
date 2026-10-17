@@ -35,49 +35,43 @@ A starter kit for building embedded Shopify apps the Laravel way: Laravel, Inert
 - PHP 8.3+, Composer, and Node.js 22+
 - [Shopify CLI](https://shopify.dev/docs/api/shopify-cli)
 - A [Dev Dashboard](https://dev.shopify.com/dashboard) account and a development store
+- For billing: a [Partner Dashboard](https://partners.shopify.com) account, where Shopify App Pricing plans are set up
 
 ## Getting started
 
 ```bash
 composer create-project portside-labs/laravel-shopify my-app
 cd my-app
-npm install
 ```
 
-1. Create an app in the Dev Dashboard.
-2. Link it and pull its credentials into `.env`:
+1. Link a Shopify app and pull its credentials into `.env`:
 
     ```bash
     php artisan shopify:install
     ```
 
-    This runs `shopify app config link` and `shopify app env pull`, then checks the configuration. Linking keeps the kit's webhook subscriptions and settings in `shopify.app.toml` and fills in your app's client ID, name, URLs, and scopes.
+    The Shopify CLI lets you pick an app or create a new one. Locally, this links `shopify.app.dev.toml`, which git ignores, and sets `SHOPIFY_APP_CONFIG=dev` in `.env`, leaving `shopify.app.toml` for production. The kit's webhook subscriptions and settings are kept, and your app's client ID, name, URLs, and scopes are filled in.
 
-3. Set your access scopes in `shopify.app.toml` and release the configuration:
-
-    ```bash
-    shopify app deploy
-    ```
-
-4. Start the app:
+2. Start the app:
 
     ```bash
     php artisan shopify:dev
     ```
 
-    This runs `shopify app dev`, which opens a free Cloudflare tunnel (no account needed), starts the server, queue worker, and Vite, and prints a link that installs the app on your development store. `APP_URL` in `.env` is updated to the tunnel's URL. To use your own tunnel instead, pass it with `--tunnel-url=https://my-app.ngrok.dev` and forward it to `localhost:3000`, or add another port to the URL.
+    This installs the Node packages and runs `shopify app dev`, which opens a free Cloudflare tunnel (no account needed), starts the server, queue worker, and Vite, applies `shopify.app.dev.toml` to your development store, and installs the app there. Press `p` to open it. `APP_URL` in `.env`, and `application_url` and `redirect_urls` in `shopify.app.dev.toml`, follow the tunnel's URL. To use your own tunnel instead, pass it with `--tunnel-url=https://my-app.ngrok.dev` and forward it to `localhost:3000`, or add another port to the URL.
 
-To keep `shopify.app.toml` untouched, for example while working on the kit itself, set `SHOPIFY_APP_CONFIG=dev` in `.env`. The commands and the CLI then use `shopify.app.dev.toml`, which git ignores.
+Change your access scopes or webhooks in `shopify.app.dev.toml`; `shopify:dev` applies them as it runs. Billing needs its own setup before the `subscribed` middleware works; see [Billing](#billing).
 
 ## Artisan commands
 
-| Command                              | What it does                                                                                                                                                     |
-| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `shopify:install`                    | Links the app and writes its credentials to `.env`.                                                                                                              |
-| `shopify:dev`                        | Serves the app through a tunnel and updates `APP_URL`. Local environment only. Use `--tunnel-url` for your own tunnel.                                           |
-| `shopify:doctor`                     | Checks credentials, URLs, API version, webhooks, and billing settings. Fails on errors, so it can run in CI.                                                     |
-| `make:shopify-webhook orders/create` | Creates the job and a test, maps the topic in `config/shopify.php`, and subscribes to it in `shopify.app.toml`.                                                  |
-| `shopify:webhook orders/create`      | Sends a signed webhook to the app in-process, with no tunnel needed. Use `--sync` to run the job immediately and `--payload=file.json` to send your own payload. |
+| Command                              | What it does                                                                                                                                                                                                                                                                                     |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `shopify:install`                    | Links the app and writes its credentials to `.env`. Locally, it links `shopify.app.dev.toml`.                                                                                                                                                                                                    |
+| `shopify:dev`                        | Serves the app through a tunnel and points `APP_URL` and the app's URLs in `shopify.app.toml` at it. Local environment only. Use `--tunnel-url` for your own tunnel.                                                                                                                             |
+| `shopify:deploy`                     | Checks the configuration and releases it with `shopify app deploy`. `--production` deploys `shopify.app.toml`, `--config=staging` a named one, and `--env=production` reads `.env.production`. Passes on `--message`, `--app-version`, `--no-release`, `--allow-updates`, and `--allow-deletes`. |
+| `shopify:doctor`                     | Checks credentials, URLs, API version, webhooks, and billing settings. Fails on errors, so it can run in CI.                                                                                                                                                                                     |
+| `make:shopify-webhook orders/create` | Creates the job and a test, maps the topic in `config/shopify.php`, and subscribes to it in `shopify.app.toml`.                                                                                                                                                                                  |
+| `shopify:webhook orders/create`      | Sends a signed webhook to the app in-process, with no tunnel needed. Use `--sync` to run the job immediately and `--payload=file.json` to send your own payload.                                                                                                                                 |
 
 ## Using the kit
 
@@ -91,7 +85,7 @@ $request->shop()->api()->graphql('{ shop { name } }')->json('data.shop');
 
 ### Webhooks
 
-Every webhook goes to `/webhooks` and is dispatched to the job mapped to its topic in `config/shopify.php`. Add one with `php artisan make:shopify-webhook {topic}`, then run `shopify app deploy`. Jobs receive the `Shop` and the payload.
+Every webhook goes to `/webhooks` and is dispatched to the job mapped to its topic in `config/shopify.php`. Add one with `php artisan make:shopify-webhook {topic}`, then run `php artisan shopify:deploy`. Jobs receive the `Shop` and the payload.
 
 ### Translations
 
@@ -108,13 +102,20 @@ The staff member's admin language is picked up from Shopify. To add a language, 
 
 ### Billing
 
-Plans are configured in the Partner Dashboard and sold by Shopify. Add to `.env`, using a Partner API client with the "Manage apps" permission:
+Plans are sold through [Shopify App Pricing](https://shopify.dev/docs/apps/launch/billing/shopify-app-pricing), so billing works once the app is set up for it:
 
-```dotenv
-SHOPIFY_APP_ID=1234
-SHOPIFY_PARTNER_ORGANIZATION_ID=12345
-SHOPIFY_PARTNER_ACCESS_TOKEN=prtapi_...
-```
+1. In the Partner Dashboard, switch the app's pricing to Shopify App Pricing and create its plans. Set each plan's welcome link to `/billing/welcome`.
+2. Create a [Partner API client](https://shopify.dev/docs/api/partner#create-a-partner-api-client) with the "Manage apps" permission.
+3. Add the app and the client to `.env`. The handle is the part of the app's admin URL after `/apps/`, the app ID is shown in the Partner Dashboard, and the organization ID is the number in the dashboard's URL:
+
+    ```dotenv
+    SHOPIFY_APP_HANDLE=my-app
+    SHOPIFY_APP_ID=1234
+    SHOPIFY_PARTNER_ORGANIZATION_ID=12345
+    SHOPIFY_PARTNER_ACCESS_TOKEN=prtapi_...
+    ```
+
+`php artisan shopify:doctor` notes any of these that are missing.
 
 Gate routes with `subscribed`, or `subscribed:pro` for a specific plan:
 
@@ -122,7 +123,7 @@ Gate routes with `subscribed`, or `subscribed:pro` for a specific plan:
 Route::get('/reports', ReportController::class)->middleware('subscribed');
 ```
 
-Shops without a plan are sent to Shopify's plan selection page. Set each plan's welcome link to `/billing/welcome`. Check plans in code with:
+Shops without a plan are sent to Shopify's plan selection page. Check plans in code with:
 
 ```php
 $shop->subscribed();          // any active plan
@@ -146,7 +147,7 @@ Shopify sends no webhook when a subscription changes, so the plan is cached for 
 
 - Serve over HTTPS and run a queue worker.
 - Set `APP_URL`, `SHOPIFY_API_KEY`, `SHOPIFY_API_SECRET`, and the billing variables if you sell plans.
-- Point `application_url` and `redirect_urls` in `shopify.app.toml` at your domain, then run `shopify app deploy`.
+- Link your production app to `shopify.app.toml` with `php artisan shopify:install --env=production`, which reads and writes `.env.production`. Point its `application_url` and `redirect_urls` at your domain, and run `php artisan shopify:deploy --production --env=production`. It refuses to deploy while the URL is still a tunnel or a placeholder.
 - Run `php artisan shopify:doctor` to catch misconfiguration. It also warns when `SHOPIFY_API_VERSION` is nearing the end of support.
 
 ## Working with AI agents

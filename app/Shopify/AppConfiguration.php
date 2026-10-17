@@ -17,6 +17,24 @@ use RuntimeException;
 class AppConfiguration
 {
     /**
+     * The name of the configuration used in the local environment, "shopify.app.dev.toml".
+     */
+    public const LOCAL = 'dev';
+
+    /**
+     * The webhook topics the kit handles out of the box, and whether each is a compliance topic.
+     *
+     * The compliance topics and "app/uninstalled" are mandatory for every app Shopify distributes.
+     */
+    public const DEFAULT_WEBHOOKS = [
+        'app/uninstalled' => false,
+        'app/scopes_update' => false,
+        'customers/data_request' => true,
+        'customers/redact' => true,
+        'shop/redact' => true,
+    ];
+
+    /**
      * The path to the configuration file.
      */
     private string $path;
@@ -50,6 +68,35 @@ class AppConfiguration
     public function path(): string
     {
         return $this->path;
+    }
+
+    /**
+     * The configuration's name, such as "dev" for "shopify.app.dev.toml", or null for "shopify.app.toml".
+     */
+    public function name(): ?string
+    {
+        return preg_match('/^shopify\.app\.(.+)\.toml$/', basename($this->path), $matches) ? $matches[1] : null;
+    }
+
+    /**
+     * The Artisan command that releases this configuration to Shopify.
+     */
+    public function deployCommand(): string
+    {
+        return 'php artisan shopify:deploy'.($this->name() ? " --config={$this->name()}" : ' --production');
+    }
+
+    /**
+     * How to get changes to this configuration to Shopify.
+     *
+     * "shopify app dev" applies the local configuration to the development store
+     * as it runs, so only the other configurations have to be deployed.
+     */
+    public function releaseInstruction(): string
+    {
+        return $this->name() === self::LOCAL
+            ? 'Run "php artisan shopify:dev" to apply the configuration to your development store'
+            : "Run \"{$this->deployCommand()}\" to release the configuration to Shopify";
     }
 
     /**
@@ -152,16 +199,79 @@ class AppConfiguration
         ];
 
         foreach ($values as $key => $value) {
-            $pattern = '/^'.$key.'\s*=\s*(?:\[[^\]]*\]|.*)$\R?/m';
-
             $contents = match (true) {
-                $value === null && $key === 'handle' => (string) preg_replace($pattern, '', $contents, 1),
+                $value === null && $key === 'handle' => (string) preg_replace($this->pattern($key), '', $contents, 1),
                 $value === null => $contents,
-                default => (string) preg_replace_callback($pattern, fn () => "{$key} = ".$this->encode($value)."\n", $contents, 1),
+                default => $this->replace($contents, $key, $value),
             };
         }
 
         return $contents;
+    }
+
+    /**
+     * Subscribe again to any of the kit's default webhook topics the file has lost.
+     *
+     * The Shopify CLI drops them whenever it rewrites the file from the Dev
+     * Dashboard, such as when "shopify app dev" links an app on its own.
+     *
+     * @return list<string> The topics that were subscribed to.
+     */
+    public function subscribeToDefaultWebhooks(string $apiVersion): array
+    {
+        $missing = array_diff_key(self::DEFAULT_WEBHOOKS, $this->webhookSubscriptions());
+
+        if ($missing === [] || ! $this->exists()) {
+            return [];
+        }
+
+        $contents = rtrim((string) file_get_contents($this->path));
+
+        if ($this->webhookApiVersion() === null) {
+            $contents = preg_match('/^\[webhooks\]\s*$/m', $contents)
+                ? (string) preg_replace('/^\[webhooks\]\s*$/m', "[webhooks]\napi_version = \"{$apiVersion}\"", $contents, 1)
+                : $contents."\n\n[webhooks]\napi_version = \"{$apiVersion}\"";
+        }
+
+        foreach (['topics' => false, 'compliance_topics' => true] as $key => $compliance) {
+            $topics = array_keys(array_filter($missing, fn (bool $isCompliance) => $isCompliance === $compliance));
+
+            if ($topics !== []) {
+                $contents .= "\n\n[[webhooks.subscriptions]]\n{$key} = ".$this->encode($topics)."\nuri = \"/webhooks\"";
+            }
+        }
+
+        file_put_contents($this->path, $contents."\n");
+
+        $this->data = null;
+
+        return array_keys($missing);
+    }
+
+    /**
+     * Point the app's URL and redirect URLs at a new origin, such as a development tunnel.
+     *
+     * Redirect URLs keep their paths; only the scheme and host they are served from change.
+     */
+    public function pointTo(string $url): void
+    {
+        if (! $this->exists()) {
+            return;
+        }
+
+        $url = rtrim($url, '/');
+
+        $redirectUrls = array_map(
+            fn (string $redirect) => $url.rtrim((string) parse_url($redirect, PHP_URL_PATH), '/'),
+            array_values(array_filter((array) $this->get('auth.redirect_urls', []), 'is_string')),
+        );
+
+        $contents = $this->replace((string) file_get_contents($this->path), 'application_url', $url);
+        $contents = $this->replace($contents, 'redirect_urls', array_values(array_unique($redirectUrls ?: [$url])));
+
+        file_put_contents($this->path, $contents);
+
+        $this->data = null;
     }
 
     /**
@@ -185,6 +295,22 @@ class AppConfiguration
             TOML);
 
         $this->data = null;
+    }
+
+    /**
+     * Replace the first value assigned to a key, leaving the rest of the file as it is.
+     */
+    private function replace(string $contents, string $key, mixed $value): string
+    {
+        return (string) preg_replace_callback($this->pattern($key), fn () => "{$key} = ".$this->encode($value)."\n", $contents, 1);
+    }
+
+    /**
+     * The pattern matching a key's assignment, including an array spread over several lines.
+     */
+    private function pattern(string $key): string
+    {
+        return '/^'.preg_quote($key, '/').'\s*=\s*(?:\[[^\]]*\]|.*)$\R?/m';
     }
 
     /**

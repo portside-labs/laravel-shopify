@@ -2,6 +2,8 @@
 
 namespace App\Console\Commands;
 
+use App\Console\Commands\Concerns\UsesLocalAppConfiguration;
+use App\Shopify\AppConfiguration;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -13,6 +15,8 @@ use Illuminate\Support\Facades\Process;
 #[Description('Serve the app to Shopify through a tunnel and point APP_URL at it')]
 class ShopifyDev extends Command
 {
+    use UsesLocalAppConfiguration;
+
     /**
      * The local port a tunnel given without one forwards to.
      */
@@ -21,7 +25,7 @@ class ShopifyDev extends Command
     /**
      * Execute the console command.
      */
-    public function handle(): int
+    public function handle(AppConfiguration $app): int
     {
         if (! $this->laravel->isLocal()) {
             $this->components->error('shopify:dev only runs in the local environment.');
@@ -36,7 +40,33 @@ class ShopifyDev extends Command
             return self::FAILURE;
         }
 
-        $arguments = ['app', 'dev', ...(config('shopify.app_config') ? ['--config', config('shopify.app_config')] : [])];
+        // The app's frontend is served by Vite, which needs the Node packages installed...
+        if (! $this->installNodePackages()) {
+            return self::FAILURE;
+        }
+
+        $app = $this->useLocalAppConfiguration($app);
+
+        // Left to itself, "shopify app dev" links an unlinked app by rewriting its configuration from the
+        // Dev Dashboard, which drops the kit's webhooks and settings, so shopify:install links it instead.
+        if ($app->clientId() === null) {
+            $this->components->info(basename($app->path()).' is not linked to an app yet, so it is linked first.');
+            $this->call('shopify:install');
+
+            if (($app = new AppConfiguration($app->path()))->clientId() === null) {
+                return self::FAILURE;
+            }
+
+            $this->newLine();
+        }
+
+        $topics = $app->subscribeToDefaultWebhooks((string) config('shopify.api_version'));
+
+        if ($topics !== []) {
+            $this->components->info('Subscribed to '.implode(', ', $topics).' in '.basename($app->path()).' again. The Shopify CLI applies them to your development store as it starts.');
+        }
+
+        $arguments = ['app', 'dev', ...($app->name() ? ['--config', $app->name()] : [])];
         $environment = [];
 
         if ($tunnel = $this->option('tunnel-url')) {
@@ -73,5 +103,21 @@ class ShopifyDev extends Command
             ->run(['shopify', ...$arguments], fn (string $type, string $output) => $this->output->write($output));
 
         return $result->successful() ? self::SUCCESS : self::FAILURE;
+    }
+
+    /**
+     * Install the Node packages the frontend is built with.
+     */
+    private function installNodePackages(): bool
+    {
+        $result = Process::path(base_path())
+            ->forever()
+            ->run(['npm', 'install'], fn (string $type, string $output) => $this->output->write($output));
+
+        if ($result->failed()) {
+            $this->components->error('"npm install" failed. Install Node.js 22 or newer, then run this command again.');
+        }
+
+        return $result->successful();
     }
 }

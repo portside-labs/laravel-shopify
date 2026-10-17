@@ -53,7 +53,7 @@ class MakeShopifyWebhook extends Command
         $this->components->bulletList([
             "Add any access scope {$topic} needs to [access_scopes] in shopify.app.toml.",
             "Try the job with \"php artisan shopify:webhook {$topic} --sync\".",
-            'Run "shopify app deploy" to subscribe the app in Shopify.',
+            $app->releaseInstruction().'.',
         ]);
 
         return self::SUCCESS;

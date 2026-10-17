@@ -1,5 +1,6 @@
 <?php
 
+use App\Shopify\AppConfiguration;
 use Illuminate\Support\Str;
 
 beforeEach(function () {
@@ -8,6 +9,11 @@ beforeEach(function () {
     file_put_contents("{$this->directory}/.env", "APP_NAME=Laravel\nAPP_URL=http://localhost\n");
     $this->app->useEnvironmentPath($this->directory);
     $this->app['env'] = 'local';
+    $this->toml = fakeAppConfiguration(str_replace(
+        'redirect_urls = ["https://app.example.test"]',
+        'redirect_urls = ["https://old.trycloudflare.com", "https://old.trycloudflare.com/auth/callback"]',
+        (string) file_get_contents(fakeAppConfiguration()->path()),
+    ));
 
     $this->originalVariables = [];
 
@@ -52,6 +58,19 @@ it('records the URL of the tunnel the Shopify CLI opened', function () {
     expect(file_get_contents("{$this->directory}/.env"))->toContain('APP_URL="https://example.trycloudflare.com"');
 });
 
+it('points the app\'s URLs in the configuration file at the tunnel', function () {
+    setShopifyCliVariable('APP_URL', 'https://example.trycloudflare.com');
+
+    $this->artisan('shopify:record-app-url')
+        ->expectsOutputToContain('APP_URL and the URLs in shopify.app.toml now point at https://example.trycloudflare.com.')
+        ->assertSuccessful();
+
+    $app = new AppConfiguration($this->toml->path());
+    expect($app->applicationUrl())->toBe('https://example.trycloudflare.com')
+        ->and($app->get('auth.redirect_urls'))->toBe(['https://example.trycloudflare.com', 'https://example.trycloudflare.com/auth/callback'])
+        ->and($app->webhookSubscriptions())->toHaveCount(5);
+});
+
 it('prefers the URL of a tunnel given to shopify:dev', function () {
     setShopifyCliVariable('APP_URL', 'https://my-app.ngrok.dev:3000');
     setShopifyCliVariable('SHOPIFY_DEV_APP_URL', 'https://my-app.ngrok.dev');
@@ -68,7 +87,8 @@ it('leaves .env alone outside the local environment', function () {
 
     $this->artisan('shopify:record-app-url')->assertSuccessful();
 
-    expect(file_get_contents("{$this->directory}/.env"))->toContain('APP_URL=http://localhost');
+    expect(file_get_contents("{$this->directory}/.env"))->toContain('APP_URL=http://localhost')
+        ->and($this->toml->applicationUrl())->toBe('https://app.example.test');
 });
 
 it('leaves .env alone when there is no tunnel', function () {

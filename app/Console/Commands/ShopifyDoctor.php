@@ -26,9 +26,26 @@ class ShopifyDoctor extends Command
     ];
 
     /**
+     * The settings billing reads, by the environment variable that sets each.
+     */
+    private const BILLING_SETTINGS = [
+        'SHOPIFY_APP_HANDLE' => 'shopify.app_handle',
+        'SHOPIFY_APP_ID' => 'shopify.app_id',
+        'SHOPIFY_PARTNER_ORGANIZATION_ID' => 'shopify.partner.organization_id',
+        'SHOPIFY_PARTNER_ACCESS_TOKEN' => 'shopify.partner.access_token',
+    ];
+
+    /**
      * The number of checks that failed.
      */
     private int $failures = 0;
+
+    /**
+     * The billing settings that are not set, while no route requires a subscription yet.
+     *
+     * @var list<string>
+     */
+    private array $unconfiguredBilling = [];
 
     /**
      * Execute the console command.
@@ -56,6 +73,15 @@ class ShopifyDoctor extends Command
         }
 
         $this->components->info('The app is configured correctly.');
+
+        // Billing is optional until a route requires a subscription, so it is a note rather than a check...
+        if ($this->unconfiguredBilling !== []) {
+            $this->components->info('Billing is not set up yet, so the "subscribed" middleware and the pricing page will not work.');
+            $this->line('  Set '.implode(', ', $this->unconfiguredBilling).' in .env. The steps are in the README');
+            $this->line('  (<href=https://github.com/portside-labs/laravel-shopify#billing>github.com/portside-labs/laravel-shopify#billing</>) and in Shopify\'s docs');
+            $this->line('  (<href=https://shopify.dev/docs/apps/launch/billing/shopify-app-pricing>shopify.dev/docs/apps/launch/billing/shopify-app-pricing</>).');
+            $this->newLine();
+        }
 
         return self::SUCCESS;
     }
@@ -96,8 +122,8 @@ class ShopifyDoctor extends Command
             'application_url points at the app',
             ! in_array($app->applicationUrl(), [null, 'https://example.com'], true),
             $app->get('build.automatically_update_urls_on_dev')
-                ? '"shopify app dev" points it at the tunnel; set your own domain before "shopify app deploy".'
-                : 'Set application_url and redirect_urls to your domain in shopify.app.toml.',
+                ? "\"shopify app dev\" points it at the tunnel; set your own domain before \"{$app->deployCommand()}\"."
+                : 'Set application_url and redirect_urls to your domain in '.basename($app->path()).'.',
             warning: (bool) $app->get('build.automatically_update_urls_on_dev'),
         );
     }
@@ -160,7 +186,7 @@ class ShopifyDoctor extends Command
             $job = $jobs[$topic] ?? null;
 
             [$fix, $warning] = match (true) {
-                $subscription === null && in_array($topic, self::REQUIRED_TOPICS, true) => ["Shopify requires it. Subscribe to {$topic} in shopify.app.toml.", false],
+                $subscription === null && in_array($topic, self::REQUIRED_TOPICS, true) => ['Shopify requires it. Run "php artisan shopify:install" to subscribe to it again. '.$app->releaseInstruction().'.', false],
                 $subscription !== null && parse_url($subscription['uri'], PHP_URL_PATH) !== '/webhooks' => ['Set its uri to "/webhooks" in shopify.app.toml.', false],
                 $job === null => ["Run \"php artisan make:shopify-webhook {$topic}\", or map a job to it in config/shopify.php.", false],
                 ! class_exists($job) => ["Create {$job}, or remove it from config/shopify.php.", false],
@@ -182,17 +208,14 @@ class ShopifyDoctor extends Command
         ));
 
         if (! $gated) {
+            $this->unconfiguredBilling = array_keys(array_filter(self::BILLING_SETTINGS, fn (string $key) => blank(config($key))));
+
             return;
         }
 
         $this->section('Billing');
 
-        foreach ([
-            'SHOPIFY_APP_ID' => 'shopify.app_id',
-            'SHOPIFY_APP_HANDLE' => 'shopify.app_handle',
-            'SHOPIFY_PARTNER_ORGANIZATION_ID' => 'shopify.partner.organization_id',
-            'SHOPIFY_PARTNER_ACCESS_TOKEN' => 'shopify.partner.access_token',
-        ] as $variable => $key) {
+        foreach (self::BILLING_SETTINGS as $variable => $key) {
             $this->check("{$variable} is set", filled(config($key)), 'Routes use the "subscribed" middleware, which reads subscriptions from the Partner API.');
         }
     }

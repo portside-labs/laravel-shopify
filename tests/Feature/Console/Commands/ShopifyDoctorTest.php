@@ -14,6 +14,25 @@ it('passes a correctly configured app', function () {
         ->assertSuccessful();
 });
 
+it('notes that billing is not set up yet without failing', function () {
+    fakeAppConfiguration();
+    config()->set('shopify.app_id', null);
+    config()->set('shopify.partner.access_token', null);
+
+    $this->artisan('shopify:doctor')
+        ->expectsOutputToContain('Billing is not set up yet')
+        ->expectsOutputToContain('Set SHOPIFY_APP_ID, SHOPIFY_PARTNER_ACCESS_TOKEN in .env.')
+        ->assertSuccessful();
+});
+
+it('says nothing about billing once it is set up', function () {
+    fakeAppConfiguration();
+
+    $this->artisan('shopify:doctor')
+        ->doesntExpectOutputToContain('Billing is not set up yet')
+        ->assertSuccessful();
+});
+
 it('fails when the credentials belong to a different app', function () {
     fakeAppConfiguration();
     config()->set('shopify.client_id', 'another-client-id');
@@ -43,7 +62,8 @@ it('fails when a mandatory compliance topic is not subscribed', function () {
     fakeAppConfiguration(str_replace('"shop/redact",', '', (string) file_get_contents(fakeAppConfiguration()->path())));
 
     $this->artisan('shopify:doctor')
-        ->expectsOutputToContain('Shopify requires it. Subscribe to shop/redact in shopify.app.toml.')
+        ->expectsOutputToContain('shop/redact')
+        ->expectsOutputToContain('Shopify requires it. Run "php artisan shopify:install" to subscribe to it again')
         ->assertFailed();
 });
 

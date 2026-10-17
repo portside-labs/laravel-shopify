@@ -27,5 +27,5 @@ yarn-error.log
 /.vscode
 /.zed
 
-# The Shopify app you develop the kit against, linked with SHOPIFY_APP_CONFIG=dev
+# The development app's configuration, linked locally by shopify:install and shopify:dev
 shopify.app.dev.toml
