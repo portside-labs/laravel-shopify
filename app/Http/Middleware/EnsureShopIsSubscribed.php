@@ -13,6 +13,8 @@ use Symfony\Component\HttpFoundation\Response;
  * may be given to require one plan in particular, as in "subscribed:pro".
  * The check reads the subscription the shop remembers and only asks Shopify
  * again once it is a few minutes old, so most visits cost no request at all.
+ * A merchant whose new plan Shopify does not show yet is sent to wait for it
+ * rather than to choose again.
  */
 class EnsureShopIsSubscribed
 {
@@ -25,15 +27,8 @@ class EnsureShopIsSubscribed
     {
         $shop = $request->shop();
 
-        // A merchant who has just chosen a plan Shopify does not show yet
-        // waits for it to be confirmed rather than being asked to choose again.
         if (! $shop?->subscribed($plan)) {
-            $expected = $shop?->expectedPlan();
-
-            return redirect()->route('pricing', [
-                ...$request->shopifyContext(),
-                ...($expected === null ? [] : ['confirming' => $expected]),
-            ]);
+            return redirect()->route('pricing', [...$request->shopifyContext(), 'confirming' => $shop?->expectedPlan()]);
         }
 
         return $next($request);

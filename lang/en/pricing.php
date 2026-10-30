@@ -7,7 +7,6 @@ return [
     'body' => 'Plans are chosen on the page Shopify hosts in your admin. It should have opened by itself; if it did not, open it here.',
     'open' => 'Open plans',
     'subscribed' => 'Your plan is active.',
-    'changed' => 'You are on the :plan plan.',
     'scheduled' => 'You move to the :plan plan when this billing cycle ends.',
     'confirming' => [
         'heading' => 'Confirming your :plan plan',

@@ -45,19 +45,12 @@ trait Billable
     /**
      * The shop's subscription, as Shopify last described it.
      *
-     * What the shop remembers is not trusted while it lags behind a plan the
-     * merchant has just chosen, so a page checked in the meantime asks again.
-     *
      * @throws RequestException
      */
     public function subscription(): ?Subscription
     {
-        $remembered = Subscription::fromShop($this);
-        $expected = $this->expectedPlan();
-
-        if ($this->subscription_synced_at?->greaterThan(now()->subMinutes(self::SUBSCRIPTION_FRESH_FOR))
-            && ($expected === null || $remembered?->hasChosen($expected))) {
-            return $remembered;
+        if ($this->subscription_synced_at?->greaterThan(now()->subMinutes(self::SUBSCRIPTION_FRESH_FOR)) && ! $this->isAwaitingPlan()) {
+            return Subscription::fromShop($this);
         }
 
         return $this->syncSubscription();
@@ -110,9 +103,7 @@ trait Billable
             'subscription_synced_at' => now(),
         ])->save();
 
-        $expected = $this->expectedPlan();
-
-        if ($expected !== null && $subscription?->hasChosen($expected)) {
+        if (! $this->isAwaitingPlan()) {
             Cache::forget($this->expectedPlanCacheKey());
         }
 
@@ -121,10 +112,6 @@ trait Billable
 
     /**
      * Remember that the merchant has just chosen the given plan, so Shopify is asked again until it shows it.
-     *
-     * Shopify sends a merchant back from a plan change moments before the
-     * Partner API stops describing the plan they left. Until it catches up,
-     * or a few minutes pass, the plan the shop remembers is not trusted.
      */
     public function expectPlan(string $plan): void
     {
@@ -132,7 +119,7 @@ trait Billable
     }
 
     /**
-     * The plan the merchant has just chosen and Shopify does not show yet, if any.
+     * The plan the merchant has just chosen, until Shopify shows it.
      */
     public function expectedPlan(): ?string
     {
@@ -185,6 +172,16 @@ trait Billable
             'cancels_at_period_end' => false,
             'subscription_synced_at' => null,
         ];
+    }
+
+    /**
+     * Determine if the merchant has chosen a plan the shop's remembered subscription does not show yet.
+     */
+    private function isAwaitingPlan(): bool
+    {
+        $plan = $this->expectedPlan();
+
+        return $plan !== null && ! Subscription::fromShop($this)?->hasChosen($plan);
     }
 
     /**

@@ -16,11 +16,11 @@ it('confirms the plan with Shopify and sends the merchant home', function () {
     ]));
 
     $response->assertRedirect(route('home', ['shop' => 'example.myshopify.com', 'host' => 'YWRtaW4', 'embedded' => '1']))
-        ->assertInertiaFlash('toast', 'You are on the pro plan.');
+        ->assertInertiaFlash('toast', 'Your plan is active.');
     expect($user->shop->refresh()->plan)->toBe('pro');
 });
 
-it('moves a merchant who changes plan onto the new one at once', function (string $from, string $to, string $toast) {
+it('moves a merchant who changes plan onto the new one at once', function (string $from, string $to) {
     $user = User::factory()->for(Shop::factory()->subscribed($from))->create();
     Http::fake(['partners.shopify.com/*' => Http::response(partnerSubscription([
         'items' => [['handle' => $to, 'price' => ['__typename' => 'FlatRatePrice']]],
@@ -28,13 +28,13 @@ it('moves a merchant who changes plan onto the new one at once', function (strin
 
     $response = $this->actingAs($user)->get(route('billing.welcome', ['plan_handle' => $to]));
 
-    $response->assertRedirect(route('home'))->assertInertiaFlash('toast', $toast);
+    $response->assertRedirect(route('home'))->assertInertiaFlash('toast', 'Your plan is active.');
     expect($user->shop->refresh())
         ->plan->toBe($to)
         ->pending_plan->toBeNull();
 })->with([
-    'upgrade' => ['basic', 'pro', 'You are on the pro plan.'],
-    'downgrade' => ['pro', 'basic', 'You are on the basic plan.'],
+    'upgrade' => ['basic', 'pro'],
+    'downgrade' => ['pro', 'basic'],
 ]);
 
 it('confirms a move to a cheaper plan that Shopify schedules for the end of the billing cycle', function () {

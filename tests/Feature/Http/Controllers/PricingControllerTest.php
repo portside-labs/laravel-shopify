@@ -39,7 +39,6 @@ it('keeps the merchant waiting while Shopify does not show the plan they chose',
         ->where('confirming', 'pro')
         ->where('plan', null)
     );
-    expect($user->shop->refresh()->expectedPlan())->toBe('pro');
     Http::assertSentCount(1);
 })->with([
     'still on the old plan' => [partnerSubscription(['items' => [['handle' => 'basic', 'price' => ['__typename' => 'FlatRatePrice']]]])],

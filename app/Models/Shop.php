@@ -134,9 +134,8 @@ class Shop extends Model
     /**
      * Forget every access token now that the app has been uninstalled.
      *
-     * Shopify cancels the subscription along with the app, so the plan it last
-     * described is forgotten too: a reinstall then asks again rather than
-     * trusting the old plan and skipping plan selection.
+     * Shopify cancels the subscription along with the app, so the plan is
+     * forgotten too and a reinstall asks for one again.
      */
     public function uninstall(): void
     {

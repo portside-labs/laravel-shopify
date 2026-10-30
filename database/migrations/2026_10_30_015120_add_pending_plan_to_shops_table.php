@@ -12,8 +12,6 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('shops', function (Blueprint $table) {
-            // The plan Shopify App Pricing has the shop moving to when the
-            // billing cycle ends, as it does with a move to a cheaper plan.
             $table->string('pending_plan')->nullable()->after('plan');
         });
     }

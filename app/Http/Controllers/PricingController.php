@@ -15,8 +15,8 @@ use Inertia\Response;
  * page opens it at the top of the window and offers a link for a browser
  * that would not let it.
  *
- * A merchant who has just chosen a plan the Partner API does not show yet
- * waits here instead, and the page keeps asking Shopify until it does.
+ * A merchant whose new plan the Partner API does not show yet waits here
+ * instead, and the page asks Shopify again until it does.
  */
 class PricingController extends Controller
 {
@@ -26,16 +26,10 @@ class PricingController extends Controller
     public function __invoke(Request $request): Response|RedirectResponse
     {
         $shop = $request->shop();
-        $confirming = $request->filled('confirming') ? $request->string('confirming')->toString() : null;
+        $confirming = $request->string('confirming')->toString() ?: null;
 
-        if ($shop !== null && $confirming !== null) {
-            // Asked afresh on every check: the plan the shop remembers would
-            // answer for minutes with the one the merchant has just left.
-            if ($shop->syncSubscription()?->hasChosen($confirming)) {
-                return redirect()->route('billing.welcome', [...$request->shopifyContext(), 'plan_handle' => $confirming]);
-            }
-
-            $shop->expectPlan($confirming);
+        if ($confirming !== null && $shop?->syncSubscription()?->hasChosen($confirming)) {
+            return redirect()->route('billing.welcome', [...$request->shopifyContext(), 'plan_handle' => $confirming]);
         }
 
         return Inertia::render('pricing', [

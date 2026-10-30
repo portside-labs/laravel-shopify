@@ -29,9 +29,8 @@ final readonly class Subscription
     /**
      * Read the subscription off the Partner API's "activeSubscription" node.
      *
-     * A change Shopify has scheduled for the next billing cycle, as it does
-     * with a move to a cheaper plan, is described in "pendingUpdate" while
-     * the plan already paid for stays in place.
+     * A move Shopify has scheduled for the next billing cycle, as it does with
+     * a cheaper plan, is described in "pendingUpdate".
      *
      * @param  array<string, mixed>  $node
      */
@@ -75,10 +74,8 @@ final readonly class Subscription
     /**
      * Determine if Shopify has recorded the merchant's choice of the given plan.
      *
-     * The choice is the plan the shop ends up on: the one Shopify has
-     * scheduled for the start of the next billing cycle, if there is one,
-     * or else the one in place. Choosing the current plan again to cancel
-     * a scheduled move only counts once Shopify has dropped the move.
+     * The choice is the plan the shop ends up on: the one scheduled for the
+     * next billing cycle, if there is one, or else the current one.
      */
     public function hasChosen(string $plan): bool
     {
@@ -94,14 +91,9 @@ final readonly class Subscription
     private static function planHandle(mixed $items): ?string
     {
         $items = collect(is_array($items) ? $items : [])->filter(fn ($item) => is_array($item));
-
-        if ($items->isEmpty()) {
-            return null;
-        }
-
         $plan = $items->first(fn (array $item) => ($item['price']['__typename'] ?? null) === 'FlatRatePrice') ?? $items->first();
 
-        return (string) ($plan['handle'] ?? '');
+        return $plan === null ? null : (string) ($plan['handle'] ?? '');
     }
 
     /**
