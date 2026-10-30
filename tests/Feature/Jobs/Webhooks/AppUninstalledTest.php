@@ -24,7 +24,7 @@ it('forgets the access tokens of the shop and its staff', function () {
 });
 
 it('forgets the plan Shopify last described, so a reinstall asks again', function () {
-    $shop = Shop::factory()->subscribed('pro')->create(['trial_ends_at' => now()->addWeek(), 'cancels_at_period_end' => true]);
+    $shop = Shop::factory()->subscribed('pro')->create(['pending_plan' => 'basic', 'trial_ends_at' => now()->addWeek(), 'cancels_at_period_end' => true]);
     Event::fake([ShopUninstalled::class]);
     Http::fake(['partners.shopify.com/*' => Http::response(['data' => ['activeSubscription' => null]])]);
 
@@ -32,6 +32,7 @@ it('forgets the plan Shopify last described, so a reinstall asks again', functio
 
     $shop->refresh();
     expect($shop->plan)->toBeNull()
+        ->and($shop->pending_plan)->toBeNull()
         ->and($shop->trial_ends_at)->toBeNull()
         ->and($shop->current_period_ends_at)->toBeNull()
         ->and($shop->cancels_at_period_end)->toBeFalse()

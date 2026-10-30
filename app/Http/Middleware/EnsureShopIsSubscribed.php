@@ -23,8 +23,17 @@ class EnsureShopIsSubscribed
      */
     public function handle(Request $request, Closure $next, ?string $plan = null): Response
     {
-        if (! $request->shop()?->subscribed($plan)) {
-            return redirect()->route('pricing', $request->shopifyContext());
+        $shop = $request->shop();
+
+        // A merchant who has just chosen a plan Shopify does not show yet
+        // waits for it to be confirmed rather than being asked to choose again.
+        if (! $shop?->subscribed($plan)) {
+            $expected = $shop?->expectedPlan();
+
+            return redirect()->route('pricing', [
+                ...$request->shopifyContext(),
+                ...($expected === null ? [] : ['confirming' => $expected]),
+            ]);
         }
 
         return $next($request);

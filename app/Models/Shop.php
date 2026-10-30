@@ -30,6 +30,7 @@ use LogicException;
  * @property Carbon|null $uninstalled_at
  * @property int|null $shopify_id
  * @property string|null $plan
+ * @property string|null $pending_plan
  * @property Carbon|null $trial_ends_at
  * @property Carbon|null $current_period_ends_at
  * @property bool $cancels_at_period_end
