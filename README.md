@@ -130,9 +130,10 @@ $shop->subscribed();          // any active plan
 $shop->subscribed('pro');     // a specific plan
 $shop->onTrial();
 $shop->subscription()?->plan;
+$shop->subscription()?->pendingPlan; // a move Shopify has scheduled for the end of the billing cycle
 ```
 
-Shopify sends no webhook when a subscription changes, so the plan is cached for five minutes. Development stores can take any plan for free.
+Shopify sends no webhook when a subscription changes, so the plan is cached for five minutes. After a plan change, the welcome link holds the merchant on the pricing page until the Partner API shows the plan they chose. Development stores can take any plan for free.
 
 ### Building pages
 

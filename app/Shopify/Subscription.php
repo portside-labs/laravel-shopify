@@ -23,26 +23,25 @@ final readonly class Subscription
         public ?CarbonInterface $trialEndsAt,
         public ?CarbonInterface $currentPeriodEndsAt,
         public bool $cancelsAtPeriodEnd,
+        public ?string $pendingPlan = null,
     ) {}
 
     /**
      * Read the subscription off the Partner API's "activeSubscription" node.
      *
-     * The plan is the item carrying the recurring charge; usage meters are
-     * items of their own and never name the plan.
+     * A move Shopify has scheduled for the next billing cycle, as it does with
+     * a cheaper plan, is described in "pendingUpdate".
      *
      * @param  array<string, mixed>  $node
      */
     public static function fromPartnerApi(array $node): self
     {
-        $items = collect(is_array($node['items'] ?? null) ? $node['items'] : [])->filter(fn ($item) => is_array($item));
-        $plan = $items->first(fn (array $item) => ($item['price']['__typename'] ?? null) === 'FlatRatePrice') ?? $items->first();
-
         return new self(
-            plan: (string) ($plan['handle'] ?? ''),
+            plan: (string) self::planHandle($node['items'] ?? null),
             trialEndsAt: self::date($node['trialEndsAt'] ?? null),
             currentPeriodEndsAt: self::date($node['currentBillingCycle']['endTime'] ?? null),
             cancelsAtPeriodEnd: (bool) ($node['cancelAtEndOfCycle'] ?? false),
+            pendingPlan: self::planHandle($node['pendingUpdate']['items'] ?? null),
         );
     }
 
@@ -60,6 +59,7 @@ final readonly class Subscription
             $shop->trial_ends_at,
             $shop->current_period_ends_at,
             $shop->cancels_at_period_end,
+            $shop->pending_plan,
         );
     }
 
@@ -69,6 +69,31 @@ final readonly class Subscription
     public function onTrial(): bool
     {
         return $this->trialEndsAt !== null && $this->trialEndsAt->isFuture();
+    }
+
+    /**
+     * Determine if Shopify has recorded the merchant's choice of the given plan.
+     *
+     * The choice is the plan the shop ends up on: the one scheduled for the
+     * next billing cycle, if there is one, or else the current one.
+     */
+    public function hasChosen(string $plan): bool
+    {
+        return ($this->pendingPlan ?? $this->plan) === $plan;
+    }
+
+    /**
+     * Read the plan's handle off a list of subscription items.
+     *
+     * The plan is the item carrying the recurring charge; usage meters are
+     * items of their own and never name the plan.
+     */
+    private static function planHandle(mixed $items): ?string
+    {
+        $items = collect(is_array($items) ? $items : [])->filter(fn ($item) => is_array($item));
+        $plan = $items->first(fn (array $item) => ($item['price']['__typename'] ?? null) === 'FlatRatePrice') ?? $items->first();
+
+        return $plan === null ? null : (string) ($plan['handle'] ?? '');
     }
 
     /**

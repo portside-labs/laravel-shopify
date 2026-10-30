@@ -29,6 +29,17 @@ it('requires the plan the route names', function () {
     $this->actingAs($user)->get('/pro')->assertRedirect(route('pricing'));
 });
 
+it('sends a merchant whose new plan Shopify does not show yet back to wait for it, rather than to choose again', function () {
+    $user = User::factory()->for(Shop::factory()->subscribed('basic'))->create();
+    $user->shop->expectPlan('pro');
+    Http::fake(['partners.shopify.com/*' => Http::response(partnerSubscription([
+        'items' => [['handle' => 'basic', 'price' => ['__typename' => 'FlatRatePrice']]],
+    ]))]);
+
+    $this->actingAs($user)->get('/pro')->assertRedirect(route('pricing', ['confirming' => 'pro']));
+    Http::assertSentCount(1);
+});
+
 it('carries the parameters Shopify loaded the app with on the redirect', function () {
     $user = User::factory()->create();
     Http::fake(['partners.shopify.com/*' => Http::response(['data' => ['activeSubscription' => null]])]);

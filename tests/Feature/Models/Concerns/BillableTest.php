@@ -43,6 +43,40 @@ it('asks Shopify again once the plan it remembers is old', function () {
     Http::assertSentCount(1);
 });
 
+it('remembers a plan Shopify has scheduled for the next billing cycle, while the current one still applies', function () {
+    $shop = Shop::factory()->create(['shopify_id' => 5678]);
+    Http::fake(['partners.shopify.com/*' => Http::response(partnerSubscription([
+        'pendingUpdate' => ['items' => [
+            ['handle' => 'usage', 'price' => ['__typename' => 'TieredPrice']],
+            ['handle' => 'basic', 'price' => ['__typename' => 'FlatRatePrice']],
+        ]],
+    ]))]);
+
+    $subscription = $shop->syncSubscription();
+
+    expect($subscription?->plan)->toBe('pro')
+        ->and($subscription?->pendingPlan)->toBe('basic');
+    expect($shop->refresh())
+        ->plan->toBe('pro')
+        ->pending_plan->toBe('basic');
+    expect($shop->subscribed('pro'))->toBeTrue();
+});
+
+it('keeps asking Shopify while it does not show the plan the merchant has just chosen, and trusts it once it does', function () {
+    $shop = Shop::factory()->subscribed('basic')->create();
+    Http::fake(['partners.shopify.com/*' => Http::sequence()
+        ->push(partnerSubscription(['items' => [['handle' => 'basic', 'price' => ['__typename' => 'FlatRatePrice']]]]))
+        ->push(partnerSubscription())]);
+
+    $shop->expectPlan('pro');
+
+    expect($shop->subscribed('pro'))->toBeFalse()
+        ->and($shop->subscribed('pro'))->toBeTrue()
+        ->and($shop->subscribed('pro'))->toBeTrue()
+        ->and($shop->expectedPlan())->toBeNull();
+    Http::assertSentCount(2);
+});
+
 it('knows when the plan is still on trial', function () {
     $shop = Shop::factory()->subscribed()->create(['trial_ends_at' => now()->addWeek()]);
 

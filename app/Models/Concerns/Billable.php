@@ -5,6 +5,7 @@ namespace App\Models\Concerns;
 use App\Shopify\PartnerApi;
 use App\Shopify\Subscription;
 use Illuminate\Http\Client\RequestException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
 /**
@@ -48,7 +49,7 @@ trait Billable
      */
     public function subscription(): ?Subscription
     {
-        if ($this->subscription_synced_at?->greaterThan(now()->subMinutes(self::SUBSCRIPTION_FRESH_FOR))) {
+        if ($this->subscription_synced_at?->greaterThan(now()->subMinutes(self::SUBSCRIPTION_FRESH_FOR)) && ! $this->isAwaitingPlan()) {
             return Subscription::fromShop($this);
         }
 
@@ -76,6 +77,14 @@ trait Billable
                             __typename
                         }
                     }
+                    pendingUpdate {
+                        items {
+                            handle
+                            price {
+                                __typename
+                            }
+                        }
+                    }
                 }
             }
             GRAPHQL, [
@@ -87,13 +96,36 @@ trait Billable
 
         $this->forceFill([
             'plan' => $subscription?->plan,
+            'pending_plan' => $subscription?->pendingPlan,
             'trial_ends_at' => $subscription?->trialEndsAt,
             'current_period_ends_at' => $subscription?->currentPeriodEndsAt,
             'cancels_at_period_end' => $subscription->cancelsAtPeriodEnd ?? false,
             'subscription_synced_at' => now(),
         ])->save();
 
+        if (! $this->isAwaitingPlan()) {
+            Cache::forget($this->expectedPlanCacheKey());
+        }
+
         return $subscription;
+    }
+
+    /**
+     * Remember that the merchant has just chosen the given plan, so Shopify is asked again until it shows it.
+     */
+    public function expectPlan(string $plan): void
+    {
+        Cache::put($this->expectedPlanCacheKey(), $plan, now()->addMinutes(self::SUBSCRIPTION_FRESH_FOR));
+    }
+
+    /**
+     * The plan the merchant has just chosen, until Shopify shows it.
+     */
+    public function expectedPlan(): ?string
+    {
+        $plan = Cache::get($this->expectedPlanCacheKey());
+
+        return is_string($plan) ? $plan : null;
     }
 
     /**
@@ -123,5 +155,40 @@ trait Billable
         }
 
         return "gid://shopify/Shop/{$this->shopify_id}";
+    }
+
+    /**
+     * Get the attributes that forget the subscription Shopify last described.
+     *
+     * @return array{plan: null, pending_plan: null, trial_ends_at: null, current_period_ends_at: null, cancels_at_period_end: false, subscription_synced_at: null}
+     */
+    protected function forgottenSubscriptionAttributes(): array
+    {
+        return [
+            'plan' => null,
+            'pending_plan' => null,
+            'trial_ends_at' => null,
+            'current_period_ends_at' => null,
+            'cancels_at_period_end' => false,
+            'subscription_synced_at' => null,
+        ];
+    }
+
+    /**
+     * Determine if the merchant has chosen a plan the shop's remembered subscription does not show yet.
+     */
+    private function isAwaitingPlan(): bool
+    {
+        $plan = $this->expectedPlan();
+
+        return $plan !== null && ! Subscription::fromShop($this)?->hasChosen($plan);
+    }
+
+    /**
+     * The cache key the plan the merchant has just chosen is kept under.
+     */
+    private function expectedPlanCacheKey(): string
+    {
+        return "shops.{$this->getKey()}.expected-plan";
     }
 }

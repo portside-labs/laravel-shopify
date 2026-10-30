@@ -30,6 +30,7 @@ use LogicException;
  * @property Carbon|null $uninstalled_at
  * @property int|null $shopify_id
  * @property string|null $plan
+ * @property string|null $pending_plan
  * @property Carbon|null $trial_ends_at
  * @property Carbon|null $current_period_ends_at
  * @property bool $cancels_at_period_end
@@ -132,6 +133,9 @@ class Shop extends Model
 
     /**
      * Forget every access token now that the app has been uninstalled.
+     *
+     * Shopify cancels the subscription along with the app, so the plan is
+     * forgotten too and a reinstall asks for one again.
      */
     public function uninstall(): void
     {
@@ -142,6 +146,7 @@ class Shop extends Model
 
         $this->forceFill([
             ...$this->forgottenAccessTokenAttributes(),
+            ...$this->forgottenSubscriptionAttributes(),
             'uninstalled_at' => now(),
         ])->save();
 
