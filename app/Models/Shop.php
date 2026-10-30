@@ -132,6 +132,10 @@ class Shop extends Model
 
     /**
      * Forget every access token now that the app has been uninstalled.
+     *
+     * Shopify cancels the subscription along with the app, so the plan it last
+     * described is forgotten too: a reinstall then asks again rather than
+     * trusting the old plan and skipping plan selection.
      */
     public function uninstall(): void
     {
@@ -142,6 +146,7 @@ class Shop extends Model
 
         $this->forceFill([
             ...$this->forgottenAccessTokenAttributes(),
+            ...$this->forgottenSubscriptionAttributes(),
             'uninstalled_at' => now(),
         ])->save();
 

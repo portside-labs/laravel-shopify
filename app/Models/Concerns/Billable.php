@@ -124,4 +124,20 @@ trait Billable
 
         return "gid://shopify/Shop/{$this->shopify_id}";
     }
+
+    /**
+     * Get the attributes that forget the subscription Shopify last described.
+     *
+     * @return array{plan: null, trial_ends_at: null, current_period_ends_at: null, cancels_at_period_end: false, subscription_synced_at: null}
+     */
+    protected function forgottenSubscriptionAttributes(): array
+    {
+        return [
+            'plan' => null,
+            'trial_ends_at' => null,
+            'current_period_ends_at' => null,
+            'cancels_at_period_end' => false,
+            'subscription_synced_at' => null,
+        ];
+    }
 }
